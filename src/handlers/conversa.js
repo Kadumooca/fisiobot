@@ -1,58 +1,106 @@
 const { getSessao, setSessao, resetarSessao } = require('../utils/sessao');
 const { enviarMensagem } = require('../services/whatsapp');
 const fisiosoft = require('../services/fisiosoft');
+const { consultarIA } = require('../services/ia');
 const { validarCPF, limparCPF, formatarCPF, validarData } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
 
-const MENU_PRINCIPAL = `👋 Olá! Bem-vindo(a) à nossa clínica!
+const MENU_PRINCIPAL = `👋 Olá! Bem-vindo(a) à *Clínica Lituânia*!
 
 Como posso te ajudar hoje?
 
-*1.* 📅 Agendar consulta
-*2.* ❌ Cancelar agendamento
-*3.* 🔄 Reagendar consulta
-*4.* 🗓️ Ver meus agendamentos
-*5.* ❓ Dúvidas frequentes
+*1.* 💬 Falar com a Lissa (tire dúvidas, conheça nossos serviços)
+*2.* 📅 Agendar consulta
+*3.* ❌ Cancelar agendamento
+*4.* 🔄 Reagendar consulta
+*5.* 🗓️ Ver meus agendamentos
+*6.* ❓ Dúvidas frequentes
 *0.* 🔚 Encerrar atendimento
 
 Digite o número da opção desejada.`;
 
-const PEDIR_CPF = `Para continuar, preciso te identificar.
-Por favor, informe seu *CPF* (somente números):`;
-
 async function processarMensagem(telefone, mensagem) {
   const texto = mensagem.trim();
   const sessao = getSessao(telefone);
-  if (['menu','voltar','0','sair'].includes(texto.toLowerCase())) {
+
+  if (['menu', 'voltar', '0', 'sair'].includes(texto.toLowerCase())) {
     resetarSessao(telefone);
     return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
+
+  if (texto.toUpperCase() === 'AGENDAR' && sessao.etapa === 'conversando_com_lissa') {
+    setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar' });
+    return enviarMensagem(telefone, `Ótimo! Vamos agendar! 😊\n\nVocê já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente`);
+  }
+
   switch (sessao.etapa) {
-    case 'menu': return handleMenu(telefone, texto);
-    case 'aguardando_cpf': return handleCPF(telefone, texto, sessao);
-    case 'aguardando_agenda': return handleAgenda(telefone, texto, sessao);
-    case 'aguardando_profissional': return handleProfissional(telefone, texto, sessao);
-    case 'aguardando_procedimento': return handleProcedimento(telefone, texto, sessao);
-    case 'aguardando_data': return handleData(telefone, texto, sessao);
-    case 'aguardando_horario': return handleHorario(telefone, texto, sessao);
+    case 'menu':                               return handleMenu(telefone, texto);
+    case 'conversando_com_lissa':              return handleLissa(telefone, texto, sessao);
+    case 'aguardando_tipo_cliente':            return handleTipoCliente(telefone, texto, sessao);
+    case 'aguardando_cpf':                     return handleCPF(telefone, texto, sessao);
+    case 'aguardando_nome_novo':               return handleNomeNovo(telefone, texto, sessao);
+    case 'aguardando_celular_novo':            return handleCelularNovo(telefone, texto, sessao);
+    case 'aguardando_email_novo':              return handleEmailNovo(telefone, texto, sessao);
+    case 'aguardando_agenda':                  return handleAgenda(telefone, texto, sessao);
+    case 'aguardando_profissional':            return handleProfissional(telefone, texto, sessao);
+    case 'aguardando_procedimento':            return handleProcedimento(telefone, texto, sessao);
+    case 'aguardando_data':                    return handleData(telefone, texto, sessao);
+    case 'aguardando_horario':                 return handleHorario(telefone, texto, sessao);
     case 'aguardando_confirmacao_agendamento': return handleConfirmacaoAgendamento(telefone, texto, sessao);
-    case 'aguardando_cancelamento': return handleCancelamento(telefone, texto, sessao);
-    case 'aguardando_confirmacao_cancel': return handleConfirmacaoCancel(telefone, texto, sessao);
-    case 'aguardando_reagendamento': return handleReagendamento(telefone, texto, sessao);
-    case 'aguardando_faq': return handleFAQ(telefone, texto);
-    default: resetarSessao(telefone); return enviarMensagem(telefone, MENU_PRINCIPAL);
+    case 'aguardando_cancelamento':            return handleCancelamento(telefone, texto, sessao);
+    case 'aguardando_confirmacao_cancel':      return handleConfirmacaoCancel(telefone, texto, sessao);
+    case 'aguardando_reagendamento':           return handleReagendamento(telefone, texto, sessao);
+    case 'aguardando_faq':                     return handleFAQ(telefone, texto);
+    default:
+      resetarSessao(telefone);
+      return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
 }
 
 async function handleMenu(telefone, texto) {
   switch (texto) {
-    case '1': setSessao(telefone, { etapa: 'aguardando_cpf', acao: 'agendar' }); return enviarMensagem(telefone, PEDIR_CPF);
-    case '2': setSessao(telefone, { etapa: 'aguardando_cpf', acao: 'cancelar' }); return enviarMensagem(telefone, PEDIR_CPF);
-    case '3': setSessao(telefone, { etapa: 'aguardando_cpf', acao: 'reagendar' }); return enviarMensagem(telefone, PEDIR_CPF);
-    case '4': setSessao(telefone, { etapa: 'aguardando_cpf', acao: 'listar' }); return enviarMensagem(telefone, PEDIR_CPF);
-    case '5': setSessao(telefone, { etapa: 'aguardando_faq' }); return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
-    default: return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
+    case '1':
+      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [] });
+      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a entender nossos serviços e encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
+    case '2':
+    case '3':
+    case '4':
+    case '5': {
+      const acoes = { '2': 'agendar', '3': 'cancelar', '4': 'reagendar', '5': 'listar' };
+      setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: acoes[texto] });
+      return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente`);
+    }
+    case '6':
+      setSessao(telefone, { etapa: 'aguardando_faq' });
+      return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
+    default:
+      return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
   }
+}
+
+async function handleLissa(telefone, texto, sessao) {
+  const historico = sessao.historicoLissa || [];
+  historico.push({ role: 'user', content: texto });
+  await enviarMensagem(telefone, '...');
+  const resposta = await consultarIA(historico);
+  if (!resposta) {
+    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅\nPara falar com nossa equipe: 📞 (11) 2268-3195\n\n*0* para voltar ao menu.`);
+  }
+  historico.push({ role: 'assistant', content: resposta });
+  setSessao(telefone, { historicoLissa: historico });
+  return enviarMensagem(telefone, resposta);
+}
+
+async function handleTipoCliente(telefone, texto, sessao) {
+  if (texto === '1') {
+    setSessao(telefone, { etapa: 'aguardando_cpf' });
+    return enviarMensagem(telefone, `Por favor, informe seu *CPF* (somente números):\n\nExemplo: 12345678901`);
+  }
+  if (texto === '2') {
+    setSessao(telefone, { etapa: 'aguardando_nome_novo' });
+    return enviarMensagem(telefone, `Ótimo! Vamos criar seu cadastro. 😊\n\nQual é o seu *nome completo*?`);
+  }
+  return enviarMensagem(telefone, `Opção inválida. Digite *1* para paciente existente ou *2* para novo paciente.`);
 }
 
 async function handleCPF(telefone, texto, sessao) {
@@ -60,13 +108,47 @@ async function handleCPF(telefone, texto, sessao) {
   const cpf = limparCPF(texto);
   await enviarMensagem(telefone, '🔍 Buscando seus dados...');
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
-  if (!cliente) return enviarMensagem(telefone, `❌ CPF *${formatarCPF(cpf)}* não encontrado.\n\nVerifique ou entre em contato com a recepção.\n\n*0* para voltar ao menu.`);
+  if (!cliente) return enviarMensagem(telefone,
+    `❌ CPF *${formatarCPF(cpf)}* não encontrado.\n\nVerifique o CPF ou digite *2* para se cadastrar.\n\n*0* para voltar ao menu.`
+  );
   setSessao(telefone, { cliente });
   switch (sessao.acao) {
-    case 'agendar': return iniciarFluxoAgendamento(telefone, cliente);
+    case 'agendar':  return iniciarFluxoAgendamento(telefone, cliente);
     case 'cancelar': return mostrarAgendamentos(telefone, cliente, 'cancelar');
-    case 'reagendar': return mostrarAgendamentos(telefone, cliente, 'reagendar');
-    case 'listar': return mostrarAgendamentos(telefone, cliente, 'listar');
+    case 'reagendar':return mostrarAgendamentos(telefone, cliente, 'reagendar');
+    case 'listar':   return mostrarAgendamentos(telefone, cliente, 'listar');
+  }
+}
+
+async function handleNomeNovo(telefone, texto, sessao) {
+  if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe seu *nome completo*:`);
+  setSessao(telefone, { etapa: 'aguardando_celular_novo', nomeNovo: texto });
+  return enviarMensagem(telefone, `Olá, *${texto}*! 😊\n\nQual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
+}
+
+async function handleCelularNovo(telefone, texto, sessao) {
+  const celular = texto.replace(/\D/g, '');
+  if (celular.length < 10) return enviarMensagem(telefone, `Celular inválido. Informe com DDD.\n\nExemplo: 11999999999`);
+  setSessao(telefone, { etapa: 'aguardando_email_novo', celularNovo: celular });
+  return enviarMensagem(telefone, `Qual é o seu *e-mail*?\n\n_Digite *pular* se preferir não informar._`);
+}
+
+async function handleEmailNovo(telefone, texto, sessao) {
+  const email = texto.toLowerCase() === 'pular' ? '' : texto;
+  await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
+  const novoCliente = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Celular: sessao.celularNovo, Email: email });
+  if (!novoCliente) {
+    resetarSessao(telefone);
+    return enviarMensagem(telefone, `❌ Erro ao criar cadastro. Entre em contato:\n📞 (11) 2268-3195\n\n*0* para voltar ao menu.`);
+  }
+  const cliente = { Id: novoCliente, Nome: sessao.nomeNovo };
+  setSessao(telefone, { cliente });
+  await enviarMensagem(telefone, `✅ Cadastro criado com sucesso, *${sessao.nomeNovo}*! 🎉`);
+  switch (sessao.acao) {
+    case 'agendar':  return iniciarFluxoAgendamento(telefone, cliente);
+    case 'cancelar': return mostrarAgendamentos(telefone, cliente, 'cancelar');
+    case 'reagendar':return mostrarAgendamentos(telefone, cliente, 'reagendar');
+    case 'listar':   return mostrarAgendamentos(telefone, cliente, 'listar');
   }
 }
 
@@ -134,23 +216,47 @@ async function handleHorario(telefone, texto, sessao) {
   if (isNaN(index) || index < 0 || index >= sessao.horarios.length) return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horarios.length}.`);
   const horarioEscolhido = sessao.horarios[index];
   setSessao(telefone, { etapa: 'aguardando_confirmacao_agendamento', horarioEscolhido });
-  return enviarMensagem(telefone, `📋 *Confirme o agendamento:*\n\n👤 ${sessao.cliente.Nome}\n👨‍⚕️ ${sessao.profissionalSelecionado.Nome}\n💆 ${sessao.procedimentoSelecionado.Nome}\n📅 ${sessao.dataSelecionada}\n🕐 ${horarioEscolhido.Hora}\n\n*1* confirmar | *2* cancelar`);
+  return enviarMensagem(telefone,
+    `📋 *Confirme o agendamento:*\n\n` +
+    `👤 ${sessao.cliente.Nome}\n` +
+    `👨‍⚕️ ${sessao.profissionalSelecionado.Nome}\n` +
+    `💆 ${sessao.procedimentoSelecionado.Nome}\n` +
+    `📅 ${sessao.dataSelecionada}\n` +
+    `🕐 ${horarioEscolhido.Hora}\n\n` +
+    `*1* confirmar | *2* cancelar`
+  );
 }
 
 async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   if (texto === '2') { resetarSessao(telefone); return enviarMensagem(telefone, `Cancelado.\n\n${MENU_PRINCIPAL}`); }
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para cancelar.');
   await enviarMensagem(telefone, '⏳ Realizando agendamento...');
-  const resultado = await fisiosoft.incluirAgendamento({ ClienteId: sessao.cliente.Id, AgendaId: sessao.agendaSelecionada.Id, ProfissionalId: sessao.profissionalSelecionado.Id, ProcedimentoId: sessao.procedimentoSelecionado.Id, Data: sessao.dataSelecionada, Hora: sessao.horarioEscolhido.Hora });
+  const resultado = await fisiosoft.incluirAgendamento({
+    ClienteId: sessao.cliente.Id,
+    AgendaId: sessao.agendaSelecionada.Id,
+    ProfissionalId: sessao.profissionalSelecionado.Id,
+    ProcedimentoId: sessao.procedimentoSelecionado.Id,
+    Data: sessao.dataSelecionada,
+    Hora: sessao.horarioEscolhido.Hora,
+  });
   resetarSessao(telefone);
-  if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar. Tente novamente ou contate a recepção.\n\n*0* para voltar.`);
-  return enviarMensagem(telefone, `✅ *Agendamento confirmado!*\n\n👤 ${sessao.cliente.Nome}\n📅 ${sessao.dataSelecionada} às ${sessao.horarioEscolhido.Hora}\n💆 ${sessao.procedimentoSelecionado.Nome}\n\nAté lá! 😊`);
+  if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar. Tente novamente ou ligue:\n📞 (11) 2268-3195`);
+  return enviarMensagem(telefone,
+    `✅ *Agendamento confirmado!*\n\n` +
+    `👤 ${sessao.cliente.Nome}\n` +
+    `📅 ${sessao.dataSelecionada} às ${sessao.horarioEscolhido.Hora}\n` +
+    `💆 ${sessao.procedimentoSelecionado.Nome}\n\n` +
+    `Até lá! 😊\n\n_Clínica Lituânia — (11) 2268-3195_`
+  );
 }
 
 async function mostrarAgendamentos(telefone, cliente, acao) {
   await enviarMensagem(telefone, '🔍 Buscando agendamentos...');
   const agendamentos = await fisiosoft.listarAgendamentosCliente(cliente.Id);
-  if (!agendamentos || agendamentos.length === 0) { resetarSessao(telefone); return enviarMensagem(telefone, `📭 Sem agendamentos futuros, *${cliente.Nome}*.\n\n*1* para agendar | *0* para voltar.`); }
+  if (!agendamentos || agendamentos.length === 0) {
+    resetarSessao(telefone);
+    return enviarMensagem(telefone, `📭 Sem agendamentos futuros, *${cliente.Nome}*.\n\n*2* para agendar | *0* para voltar.`);
+  }
   const lista = agendamentos.map((a, i) => `*${i+1}.* ${a.Data} às ${a.Hora} - ${a.Procedimento || 'Fisioterapia'} com ${a.Profissional || ''}`).join('\n');
   if (acao === 'listar') { resetarSessao(telefone); return enviarMensagem(telefone, `📅 *Seus agendamentos:*\n\n${lista}\n\n*0* para voltar.`); }
   const emoji = acao === 'cancelar' ? '❌' : '🔄';
@@ -173,7 +279,7 @@ async function handleConfirmacaoCancel(telefone, texto, sessao) {
   await enviarMensagem(telefone, '⏳ Cancelando...');
   const resultado = await fisiosoft.desmarcarAgendamento(sessao.agendamentoParaCancelar.Id);
   resetarSessao(telefone);
-  if (!resultado) return enviarMensagem(telefone, `❌ Erro ao cancelar. Contate a recepção.\n\n*0* para voltar.`);
+  if (!resultado) return enviarMensagem(telefone, `❌ Erro ao cancelar. Ligue:\n📞 (11) 2268-3195`);
   return enviarMensagem(telefone, `✅ Cancelado com sucesso!\n\n${MENU_PRINCIPAL}`);
 }
 
@@ -182,7 +288,13 @@ async function handleReagendamento(telefone, texto, sessao) {
   if (isNaN(index) || index < 0 || index >= sessao.agendamentos.length) return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.agendamentos.length}.`);
   const ag = sessao.agendamentos[index];
   await fisiosoft.desmarcarAgendamento(ag.Id);
-  setSessao(telefone, { etapa: 'aguardando_data', cliente: sessao.cliente, agendaSelecionada: { Id: ag.AgendaId, Nome: ag.Agenda }, profissionalSelecionado: { Id: ag.ProfissionalId, Nome: ag.Profissional }, procedimentoSelecionado: { Id: ag.ProcedimentoId, Nome: ag.Procedimento } });
+  setSessao(telefone, {
+    etapa: 'aguardando_data',
+    cliente: sessao.cliente,
+    agendaSelecionada: { Id: ag.AgendaId, Nome: ag.Agenda },
+    profissionalSelecionado: { Id: ag.ProfissionalId, Nome: ag.Profissional },
+    procedimentoSelecionado: { Id: ag.ProcedimentoId, Nome: ag.Procedimento },
+  });
   return enviarMensagem(telefone, `🔄 Agendamento de *${ag.Data}* removido.\n\nInforme a *nova data* (DD/MM/AAAA):`);
 }
 
