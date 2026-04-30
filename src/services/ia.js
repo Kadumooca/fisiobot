@@ -1,4 +1,4 @@
-const SYSTEM_PROMPT = `Você é a Ana, atendente virtual da Clínica Lituânia, localizada na Rua Lituânia, 209 - Mooca, São Paulo/SP. Telefone: (11) 2268-3195.
+const SYSTEM_PROMPT = `Você é a Lissa, atendente virtual da Clínica Lituânia, localizada na Rua Lituânia, 209 - Mooca, São Paulo/SP. Telefone: (11) 2268-3195.
 
 Seu estilo é descontraído, acolhedor, empático e profissional. Use emojis com moderação. Sempre demonstre interesse genuíno pela dor/queixa do paciente antes de sugerir tratamentos.
 
@@ -8,7 +8,7 @@ Seu estilo é descontraído, acolhedor, empático e profissional. Use emojis com
 - Sessão avulsa (1h): R$ 250 — Débito/PIX
 - Pacote 10 sessões: R$ 2.150 — Débito/PIX
 - Pacote 10 sessões parcelado: R$ 2.300 — Débito/PIX/Crédito em 3x
-Tratamos: coluna (hérnia de disco, protrusão, abaulamento, artrodese, prótese), joelho (LCA, menisco, artroplastia, bursite, tendinite), ombro (manguito rotador, bursite, artroplastia, lesão de tendão), quadril (bursite, síndrome do piriforme, artroplastia, tendinite glúteo), tornozelo (entorse, joanete), cotovelo (epicondilite, epitrocleíte, prótese, túnel do carpo), mão/punho (De Quervain, dedo em gatilho, túnel do carpo), artrose, estiramento/rompimento muscular, fisioterapia preventiva para idosos, pré e pós-cirúrgico, entre outras condições.
+Tratamos: coluna (hérnia de disco, protrusão, abaulamento, artrodese, prótese), joelho (LCA, menisco, artroplastia, bursite, tendinite), ombro (manguito rotador, bursite, artroplastia, lesão de tendão), quadril (bursite, síndrome do piriforme, artroplastia, tendinite glúteo), tornozelo (entorse, joanete), cotovelo (epicondilite, epitrocleíte, túnel do carpo), mão/punho (De Quervain, dedo em gatilho), artrose, estiramento/rompimento muscular, fisioterapia preventiva para idosos, pré e pós-cirúrgico, entre outras condições.
 
 🏊 HIDROTERAPIA
 - Sessão avulsa (1h individual): R$ 275 — Débito/PIX
@@ -68,23 +68,28 @@ Médico especialista, não aceita convênios. Realiza aplicação para esclerose
 6. Se perguntarem sobre convênio, explique gentilmente que são particular
 7. Nunca invente informações — se não souber algo, oriente a ligar: (11) 2268-3195
 8. Mantenha as respostas objetivas — no máximo 3 parágrafos curtos
-9. Se o paciente digitar *AGENDAR*, encerre dizendo que vai transferi-lo para o agendamento`;
+9. Se o paciente digitar AGENDAR, encerre dizendo que vai transferi-lo para o agendamento`;
 
 async function consultarIA(historico) {
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+      },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'llama-3.3-70b-versatile',
         max_tokens: 1000,
-        system: SYSTEM_PROMPT,
-        messages: historico,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...historico,
+        ],
       }),
     });
 
     const data = await response.json();
-    return data.content?.[0]?.text || null;
+    return data.choices?.[0]?.message?.content || null;
   } catch (err) {
     console.error('Erro ao consultar IA:', err.message);
     return null;
