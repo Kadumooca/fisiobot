@@ -413,10 +413,10 @@ async function handleReagendamento(telefone, texto, sessao) {
     return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.agendamentos.length}.`);
   }
   const ag = sessao.agendamentos[index];
-  await fisiosoft.desmarcarAgendamento(ag.Id);
+  await fisiosoft.desmarcarAgendamento(ag.IdAgendamento);
 
   // Busca agenda correspondente
-  const agendaSelecionada = { agendaId: ag.AgendaId, procedimentoId: 5, agendaNome: ag.Profissional };
+ const agendaSelecionada = { agendaId: ag.IdAgenda, procedimentoId: ag.IdProcedimento, idProfissional: ag.IdProfissional, agendaNome: ag.Procedimento };
   return buscarEMostrarHorarios(telefone, sessao.cliente, agendaSelecionada, 7);
 }
 
