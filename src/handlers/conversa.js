@@ -363,7 +363,12 @@ async function mostrarAgendamentos(telefone, cliente, acao) {
     resetarSessao(telefone);
     return enviarMensagem(telefone, `📭 Sem agendamentos futuros, *${cliente.Nome}*.\n\n*2* para agendar | *0* para voltar.`);
   }
-  const lista = agendamentos.map((a, i) => `*${i+1}.* ${a.Data} às ${a.Hora} - ${a.Procedimento || 'Consulta'} com ${a.Profissional || ''}`).join('\n');
+  const lista = agendamentos.map((a, i) => {
+  const dataHora = a.DataHoraInicio ? a.DataHoraInicio.split(' ') : ['', ''];
+  const data = dataHora[0] || '';
+  const hora = dataHora[1] ? dataHora[1].substring(0, 5) : '';
+  return `*${i+1}.* ${data} às ${hora} - ${a.Procedimento || 'Consulta'}`;
+}).join('\n');
   if (acao === 'listar') { resetarSessao(telefone); return enviarMensagem(telefone, `📅 *Seus agendamentos:*\n\n${lista}\n\n*0* para voltar.`); }
   const emoji = acao === 'cancelar' ? '❌' : '🔄';
   const textoAcao = acao === 'cancelar' ? 'cancelar' : 'reagendar';
@@ -378,19 +383,30 @@ async function handleCancelamento(telefone, texto, sessao) {
   }
   const ag = sessao.agendamentos[index];
   setSessao(telefone, { etapa: 'aguardando_confirmacao_cancel', agendamentoParaCancelar: ag });
-  return enviarMensagem(telefone, `⚠️ Cancelar este agendamento?\n\n📅 *${ag.Data}* às *${ag.Hora}*\n👨‍⚕️ ${ag.Profissional || 'Profissional'}\n\n*1* confirmar | *2* manter`);
+  
+  // Extrai data e hora do DataHoraInicio
+  const dataHora = ag.DataHoraInicio ? ag.DataHoraInicio.split(' ') : ['', ''];
+  const data = dataHora[0] || '';
+  const hora = dataHora[1] ? dataHora[1].substring(0, 5) : '';
+
+  return enviarMensagem(telefone,
+    `⚠️ Cancelar este agendamento?\n\n` +
+    `👤 ${ag.Cliente || sessao.cliente.Nome}\n` +
+    `📅 ${data} às ${hora}\n` +
+    `💆 ${ag.Procedimento || 'Consulta'}\n\n` +
+    `*1* confirmar | *2* manter`
+  );
 }
 
 async function handleConfirmacaoCancel(telefone, texto, sessao) {
   if (texto === '2') { resetarSessao(telefone); return enviarMensagem(telefone, `Mantido!\n\n${MENU_PRINCIPAL}`); }
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para manter.');
   await enviarMensagem(telefone, '⏳ Cancelando...');
-  const resultado = await fisiosoft.desmarcarAgendamento(sessao.agendamentoParaCancelar.Id);
+  const resultado = await fisiosoft.desmarcarAgendamento(sessao.agendamentoParaCancelar.IdAgendamento);
   resetarSessao(telefone);
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao cancelar.\n\n${CONTATO_HUMANO}`);
   return enviarMensagem(telefone, `✅ Cancelado com sucesso!\n\n${MENU_PRINCIPAL}`);
 }
-
 async function handleReagendamento(telefone, texto, sessao) {
   const index = parseInt(texto) - 1;
   if (isNaN(index) || index < 0 || index >= sessao.agendamentos.length) {
