@@ -30,52 +30,51 @@ const AGENDAS_POR_ESPECIALIDADE = {
   '1': {
     nome: 'Fisioterapia',
     periodos: [
-      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, procedimentoId: 5, agendaNome: 'Fisioterapia - Manhã' },
-      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, procedimentoId: 5, agendaNome: 'Fisioterapia - Tarde' },
+      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, procedimentoId: 5, idProfissional: 1, agendaNome: 'Fisioterapia - Manhã' },
+      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, procedimentoId: 5, idProfissional: 28, agendaNome: 'Fisioterapia - Tarde' },
     ]
   },
   '2': {
     nome: 'Hidroterapia',
     periodos: [
-      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, procedimentoId: 6, agendaNome: 'Hidroterapia - Manhã' },
-      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, procedimentoId: 6, agendaNome: 'Hidroterapia - Tarde' },
+      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, procedimentoId: 6, idProfissional: 19, agendaNome: 'Hidroterapia - Manhã' },
+      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, procedimentoId: 6, idProfissional: 2, agendaNome: 'Hidroterapia - Tarde' },
     ]
   },
   '3': {
     nome: 'Pilates',
     periodos: [
-      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, procedimentoId: 57, agendaNome: 'Pilates - Manhã' },
-      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 57, agendaNome: 'Pilates - Tarde' },
+      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, procedimentoId: 57, idProfissional: 27, agendaNome: 'Pilates - Manhã' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 57, idProfissional: 6, agendaNome: 'Pilates - Tarde' },
     ]
   },
   '4': {
     nome: 'RPG',
     periodos: [
-      { label: '🌅 Quinta manhã (8h às 11h)', agendaId: 6, procedimentoId: 9, agendaNome: 'RPG - Manhã quinta' },
-      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, procedimentoId: 9, agendaNome: 'RPG - Tarde' },
+      { label: '🌅 Quinta manhã (8h às 11h)', agendaId: 6, procedimentoId: 9, idProfissional: 7, agendaNome: 'RPG - Manhã quinta' },
+      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, procedimentoId: 9, idProfissional: 7, agendaNome: 'RPG - Tarde' },
     ]
   },
   '5': {
     nome: 'Acupuntura',
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 8, procedimentoId: 1, agendaNome: 'Acupuntura' },
+      { label: '📋 Ver horários disponíveis', agendaId: 8, procedimentoId: 1, idProfissional: 8, agendaNome: 'Acupuntura' },
     ]
   },
   '6': {
     nome: 'Consulta Vascular',
     diasBusca: 30,
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 11, procedimentoId: 22, agendaNome: 'Consulta Vascular' },
+      { label: '📋 Ver horários disponíveis', agendaId: 11, procedimentoId: 22, idProfissional: 9, agendaNome: 'Consulta Vascular' },
     ]
   },
   '7': {
     nome: 'Drenagem / Massagem Relaxante',
     periodos: [
-      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, agendaNome: 'Drenagem / Massagem' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
     ]
   },
 };
-
 // Formata data Date para dd/mm/aaaa
 function formatarData(date) {
   const d = String(date.getDate()).padStart(2, '0');
@@ -340,7 +339,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     IdCliente:      sessao.cliente.Id,
     IdAgenda:       sessao.agendaSelecionada.agendaId,
     IdProcedimento: sessao.agendaSelecionada.procedimentoId,
-    IdProfissional: sessao.agendaSelecionada.idProfissional || 0,
+    IdProfissional: sessao.agendaSelecionada.idProfissional,
     Data:           sessao.horarioEscolhido.data,
     Hora:           sessao.horarioEscolhido.hora,
   });
