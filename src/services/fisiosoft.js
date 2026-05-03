@@ -15,11 +15,30 @@ async function buscarClientePorCPF(cpf) {
   } catch (err) { console.error('Erro buscarClientePorCPF:', err.message); return null; }
 }
 
+async function incluirCliente(payload) {
+  try {
+    const { data } = await api.post('/cliente/incluir', payload);
+    return data.Dado;
+  } catch (err) { console.error('Erro incluirCliente:', err.message); return null; }
+}
+
+// Retorna todas as agendas
 async function listarAgendas() {
   try {
     const { data } = await api.post('/agenda/listar', {});
     return data.Dado;
   } catch (err) { console.error('Erro listarAgendas:', err.message); return null; }
+}
+
+// Filtra agendas pela especialidade escolhida
+async function listarAgendasPorEspecialidade(especialidade) {
+  try {
+    const { data } = await api.post('/agenda/listar', {});
+    const agendas = data.Dado || [];
+    return agendas.filter(a => 
+      a.Nome.toUpperCase().includes(especialidade.toUpperCase())
+    );
+  } catch (err) { console.error('Erro listarAgendasPorEspecialidade:', err.message); return null; }
 }
 
 async function buscarHorariosDisponiveis(agendaId, dataStr) {
@@ -34,13 +53,6 @@ async function listarProcedimentos() {
     const { data } = await api.post('/procedimento/listar', {});
     return data.Dado;
   } catch (err) { console.error('Erro listarProcedimentos:', err.message); return null; }
-}
-
-async function listarProfissionais() {
-  try {
-    const { data } = await api.post('/profissional/listar', {});
-    return data.Dado;
-  } catch (err) { console.error('Erro listarProfissionais:', err.message); return null; }
 }
 
 async function incluirAgendamento(payload) {
@@ -66,10 +78,11 @@ async function listarAgendamentosCliente(clienteId) {
 
 module.exports = {
   buscarClientePorCPF,
+  incluirCliente,
   listarAgendas,
+  listarAgendasPorEspecialidade,
   buscarHorariosDisponiveis,
   listarProcedimentos,
-  listarProfissionais,
   incluirAgendamento,
   desmarcarAgendamento,
   listarAgendamentosCliente,
