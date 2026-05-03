@@ -23,16 +23,54 @@ Como posso te ajudar hoje?
 
 Digite o número da opção desejada.`;
 
-// Mapa de especialidades para filtrar agendas
-const ESPECIALIDADES = {
-  'fisioterapia': 'FISIOTERAPIA',
-  'hidroterapia': 'HIDROTERAPIA',
-  'pilates': 'PILATES',
-  'rpg': 'RPG',
-  'acupuntura': 'ACUPUNTURA',
-  'vascular': 'VASCULAR',
-  'drenagem': 'DRENAGEM',
-  'massagem': 'MASSAGEM',
+// Mapeamento de especialidades → períodos → agendas
+const AGENDAS_POR_ESPECIALIDADE = {
+  '1': { // Fisioterapia
+    nome: 'Fisioterapia',
+    periodos: [
+      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, agendaNome: 'EDUARDO - FISIOTERAPIA' },
+      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, agendaNome: 'EDSON - FISIOTERAPIA' },
+    ]
+  },
+  '2': { // Hidroterapia
+    nome: 'Hidroterapia',
+    periodos: [
+      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, agendaNome: 'ELAINE - HIDROTERAPIA' },
+      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, agendaNome: 'FABIOLA - HIDROTERAPIA' },
+    ]
+  },
+  '3': { // Pilates
+    nome: 'Pilates',
+    periodos: [
+      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, agendaNome: 'CARINA - PILATES' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, agendaNome: 'ALDINE - PILATES' },
+    ]
+  },
+  '4': { // RPG
+    nome: 'RPG',
+    periodos: [
+      { label: '🌅 Manhã quinta-feira (8h às 11h)', agendaId: 6, agendaNome: 'MELINA - RPG' },
+      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, agendaNome: 'MELINA - RPG' },
+    ]
+  },
+  '5': { // Acupuntura
+    nome: 'Acupuntura',
+    periodos: [
+      { label: '📋 Ver horários disponíveis', agendaId: 8, agendaNome: 'RITA - ACUPUNTURA' },
+    ]
+  },
+  '6': { // Vascular
+    nome: 'Consulta Vascular',
+    periodos: [
+      { label: '📋 Ver horários disponíveis', agendaId: 11, agendaNome: 'DR CARLOS - VASCULAR' },
+    ]
+  },
+  '7': { // Drenagem
+    nome: 'Drenagem / Massagem',
+    periodos: [
+      { label: '📋 Ver horários disponíveis', agendaId: 1, agendaNome: 'DRENAGEM' },
+    ]
+  },
 };
 
 async function processarMensagem(telefone, mensagem) {
@@ -57,8 +95,8 @@ async function processarMensagem(telefone, mensagem) {
     case 'aguardando_nome_novo':               return handleNomeNovo(telefone, texto, sessao);
     case 'aguardando_celular_novo':            return handleCelularNovo(telefone, texto, sessao);
     case 'aguardando_email_novo':              return handleEmailNovo(telefone, texto, sessao);
-    case 'aguardando_procedimento':            return handleProcedimento(telefone, texto, sessao);
-    case 'aguardando_agenda':                  return handleAgenda(telefone, texto, sessao);
+    case 'aguardando_especialidade':           return handleEspecialidade(telefone, texto, sessao);
+    case 'aguardando_periodo':                 return handlePeriodo(telefone, texto, sessao);
     case 'aguardando_data':                    return handleData(telefone, texto, sessao);
     case 'aguardando_horario':                 return handleHorario(telefone, texto, sessao);
     case 'aguardando_confirmacao_agendamento': return handleConfirmacaoAgendamento(telefone, texto, sessao);
@@ -90,7 +128,7 @@ async function handleMenu(telefone, texto) {
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
     case '7':
       resetarSessao(telefone);
-      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\nClique no número abaixo para ligar diretamente:\n\n${TELEFONE_CLINICA}\n\nHorário: Segunda a Sexta, 7h às 20h 😊`);
+      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\nClique no número abaixo para ligar:\n\n${TELEFONE_CLINICA}\n\nHorário: Segunda a Sexta, 7h às 20h 😊`);
     default:
       return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
   }
@@ -172,57 +210,53 @@ async function handleEmailNovo(telefone, texto, sessao) {
 // ─── Fluxo de Agendamento ─────────────────────────────────────────────────────
 
 async function iniciarFluxoAgendamento(telefone, cliente) {
-  await enviarMensagem(telefone, `✅ Olá, *${cliente.Nome}*!\n\nQual especialidade deseja agendar?\n\n*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem\n\n*0* para voltar ao menu`);
-  setSessao(telefone, { etapa: 'aguardando_procedimento', cliente });
+  setSessao(telefone, { etapa: 'aguardando_especialidade', cliente });
+  return enviarMensagem(telefone,
+    `✅ Olá, *${cliente.Nome}*!\n\nQual especialidade deseja agendar?\n\n` +
+    `*1.* 🦴 Fisioterapia\n` +
+    `*2.* 🏊 Hidroterapia\n` +
+    `*3.* 🧘 Pilates\n` +
+    `*4.* 📐 RPG\n` +
+    `*5.* 🪡 Acupuntura\n` +
+    `*6.* 🩺 Consulta Vascular\n` +
+    `*7.* 💆 Drenagem / Massagem\n\n` +
+    `*0* para voltar ao menu`
+  );
 }
 
-async function handleProcedimento(telefone, texto, sessao) {
-  const especialidades = {
-    '1': 'FISIOTERAPIA',
-    '2': 'HIDROTERAPIA',
-    '3': 'PILATES',
-    '4': 'RPG',
-    '5': 'ACUPUNTURA',
-    '6': 'VASCULAR',
-    '7': 'DRENAGEM',
-  };
-
-  const especialidade = especialidades[texto];
+async function handleEspecialidade(telefone, texto, sessao) {
+  const especialidade = AGENDAS_POR_ESPECIALIDADE[texto];
   if (!especialidade) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
 
-  await enviarMensagem(telefone, '🔍 Buscando profissionais disponíveis...');
-  const agendas = await fisiosoft.listarAgendasPorEspecialidade(especialidade);
-
-  if (!agendas || agendas.length === 0) {
-    return enviarMensagem(telefone, `😔 Nenhum profissional disponível para ${especialidade}.\n\n${CONTATO_HUMANO}`);
+  // Se só tem um período, vai direto para data
+  if (especialidade.periodos.length === 1) {
+    const agenda = especialidade.periodos[0];
+    setSessao(telefone, { etapa: 'aguardando_data', agendaSelecionada: agenda });
+    return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\n📅 Para qual data deseja agendar?\n\nFormato *DD/MM/AAAA*:`);
   }
 
-  if (agendas.length === 1) {
-    setSessao(telefone, { etapa: 'aguardando_data', especialidadeSelecionada: especialidade, agendaSelecionada: agendas[0] });
-    return enviarMensagem(telefone, `👨‍⚕️ Profissional: *${agendas[0].Nome}*\n\n📅 Para qual data deseja agendar?\n\nFormato *DD/MM/AAAA*:`);
-  }
-
-  const lista = agendas.map((a, i) => `*${i+1}.* ${a.Nome}`).join('\n');
-  setSessao(telefone, { etapa: 'aguardando_agenda', especialidadeSelecionada: especialidade, agendas });
-  return enviarMensagem(telefone, `👨‍⚕️ Escolha o profissional:\n\n${lista}\n\nDigite o número:`);
+  const lista = especialidade.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
+  setSessao(telefone, { etapa: 'aguardando_periodo', especialidade });
+  return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número:`);
 }
 
-async function handleAgenda(telefone, texto, sessao) {
+async function handlePeriodo(telefone, texto, sessao) {
   const index = parseInt(texto) - 1;
-  if (isNaN(index) || index < 0 || index >= sessao.agendas.length) {
-    return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.agendas.length}.`);
+  const periodos = sessao.especialidade.periodos;
+  if (isNaN(index) || index < 0 || index >= periodos.length) {
+    return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${periodos.length}.`);
   }
-  const agendaSelecionada = sessao.agendas[index];
+  const agendaSelecionada = periodos[index];
   setSessao(telefone, { etapa: 'aguardando_data', agendaSelecionada });
-  return enviarMensagem(telefone, `👨‍⚕️ Profissional: *${agendaSelecionada.Nome}*\n\n📅 Para qual data deseja agendar?\n\nFormato *DD/MM/AAAA*:`);
+  return enviarMensagem(telefone, `✅ *${agendaSelecionada.label}*\n\n📅 Para qual data deseja agendar?\n\nFormato *DD/MM/AAAA*:`);
 }
 
 async function handleData(telefone, texto, sessao) {
   if (!validarData(texto)) return enviarMensagem(telefone, `Data inválida. Use o formato *DD/MM/AAAA*.\n\nExemplo: 15/05/2025`);
   await enviarMensagem(telefone, '🔍 Buscando horários...');
-  const horarios = await fisiosoft.buscarHorariosDisponiveis(sessao.agendaSelecionada.Id, texto);
+  const horarios = await fisiosoft.buscarHorariosDisponiveis(sessao.agendaSelecionada.agendaId, texto);
   if (!horarios || horarios.length === 0) {
-    return enviarMensagem(telefone, `😔 Sem horários para *${texto}*.\n\nTente outra data ou *0* para voltar.\n\n${CONTATO_HUMANO}`);
+    return enviarMensagem(telefone, `😔 Sem horários disponíveis para *${texto}*.\n\nTente outra data ou *0* para voltar.\n\n${CONTATO_HUMANO}`);
   }
   const lista = horarios.map((h, i) => `*${i+1}.* ${h.Hora}`).join('\n');
   setSessao(telefone, { etapa: 'aguardando_horario', dataSelecionada: texto, horarios });
@@ -239,7 +273,7 @@ async function handleHorario(telefone, texto, sessao) {
   return enviarMensagem(telefone,
     `📋 *Confirme o agendamento:*\n\n` +
     `👤 ${sessao.cliente.Nome}\n` +
-    `👨‍⚕️ ${sessao.agendaSelecionada.Nome}\n` +
+    `💆 ${sessao.agendaSelecionada.agendaNome}\n` +
     `📅 ${sessao.dataSelecionada}\n` +
     `🕐 ${horarioEscolhido.Hora}\n\n` +
     `*1* confirmar | *2* cancelar`
@@ -251,18 +285,17 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para cancelar.');
   await enviarMensagem(telefone, '⏳ Realizando agendamento...');
   const resultado = await fisiosoft.incluirAgendamento({
-    ClienteId:      sessao.cliente.Id,
-    AgendaId:       sessao.agendaSelecionada.Id,
-    ProfissionalId: sessao.agendaSelecionada.IdProfissional,
-    Data:           sessao.dataSelecionada,
-    Hora:           sessao.horarioEscolhido.Hora,
+    ClienteId: sessao.cliente.Id,
+    AgendaId:  sessao.agendaSelecionada.agendaId,
+    Data:      sessao.dataSelecionada,
+    Hora:      sessao.horarioEscolhido.Hora,
   });
   resetarSessao(telefone);
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
   return enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n` +
-    `👨‍⚕️ ${sessao.agendaSelecionada.Nome}\n` +
+    `💆 ${sessao.agendaSelecionada.agendaNome}\n` +
     `📅 ${sessao.dataSelecionada} às ${sessao.horarioEscolhido.Hora}\n\n` +
     `Até lá! 😊\n\n_Clínica Lituânia — (11) 2268-3195_`
   );
@@ -315,7 +348,7 @@ async function handleReagendamento(telefone, texto, sessao) {
   setSessao(telefone, {
     etapa: 'aguardando_data',
     cliente: sessao.cliente,
-    agendaSelecionada: { Id: ag.AgendaId, Nome: ag.Profissional, IdProfissional: ag.ProfissionalId },
+    agendaSelecionada: { agendaId: ag.AgendaId, agendaNome: ag.Profissional },
   });
   return enviarMensagem(telefone, `🔄 Agendamento de *${ag.Data}* removido.\n\nInforme a *nova data* (DD/MM/AAAA):`);
 }
