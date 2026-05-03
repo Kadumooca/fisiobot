@@ -4,7 +4,7 @@ const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
 const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
-const { buscarClientePorTelefone, salvarClientePorTelefone } = require('../utils/clienteCache');
+const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, marcarAgendou, marcarRespondeuRemarketing } = require('../utils/clienteCache');
 const TELEFONE_CLINICA = 'tel:+551122683195';
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
 
@@ -120,6 +120,9 @@ if (data.getDay() === 0 || data.getDay() === 6) continue;
 async function processarMensagem(telefone, mensagem) {
   const texto = mensagem.trim();
   const sessao = getSessao(telefone);
+
+  // Se respondeu qualquer mensagem, marca que respondeu ao remarketing
+  await marcarRespondeuRemarketing(telefone);
 
   if (['menu', 'voltar', '0', 'sair'].includes(texto.toLowerCase())) {
     resetarSessao(telefone);
@@ -288,6 +291,9 @@ async function handleEspecialidade(telefone, texto, sessao) {
   const especialidade = AGENDAS_POR_ESPECIALIDADE[texto];
   if (!especialidade) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
 
+  // Registra lead com especialidade de interesse
+  await registrarLead(telefone, sessao.cliente?.Nome, especialidade.nome);
+
   if (especialidade.periodos.length === 1) {
     const agenda = especialidade.periodos[0];
     const dias = especialidade.diasBusca || 7;
@@ -362,8 +368,12 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   });
   resetarSessao(telefone);
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
+  
+  // Marca que o paciente agendou — remove do remarketing
+  await marcarAgendou(telefone);
+
   return enviarMensagem(telefone,
-    `✅ *Agendamento confirmado!*\n\n` +
+    `✅ *Agendamento confirmado!*\n\n`
     `👤 ${sessao.cliente.Nome}\n` +
     `💆 ${sessao.agendaSelecionada.agendaNome}\n` +
     `📅 ${sessao.horarioEscolhido.diaSemana} ${sessao.horarioEscolhido.data} às ${sessao.horarioEscolhido.hora}\n\n` +
