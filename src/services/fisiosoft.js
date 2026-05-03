@@ -75,11 +75,16 @@ async function incluirAgendamento(payload) {
 
 async function desmarcarAgendamento(agendamentoId) {
   try {
+    console.log('Desmarcando agendamento:', agendamentoId);
     const { data } = await api.post('/agendamento/desmarcar', { IdAgendamento: agendamentoId });
+    console.log('Resposta desmarcar:', JSON.stringify(data));
     return data;
-  } catch (err) { console.error('Erro desmarcarAgendamento:', err.message); return null; }
+  } catch (err) { 
+    console.error('Erro desmarcarAgendamento:', err.message);
+    if (err.response) console.error('Resposta erro desmarcar:', JSON.stringify(err.response.data));
+    return null; 
+  }
 }
-
 async function listarAgendamentosCliente(clienteId) {
   try {
     const { data } = await api.post('/agendamento/listar-agendamentos-cliente', { IdCliente: clienteId });
