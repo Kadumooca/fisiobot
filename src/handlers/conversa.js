@@ -337,9 +337,11 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para cancelar.');
   await enviarMensagem(telefone, '⏳ Realizando agendamento...');
   const resultado = await fisiosoft.incluirAgendamento({
-    ClienteId:      sessao.cliente.Id,
-    AgendaId:       sessao.agendaSelecionada.agendaId,
-    ProcedimentoId: sessao.agendaSelecionada.procedimentoId,
+    IdCliente:      sessao.cliente.Id,
+    IdAgenda:       sessao.agendaSelecionada.agendaId,
+    IdProcedimento: sessao.agendaSelecionada.procedimentoId,
+    IdConvenio:     0,
+    IdProfissional: 0,
     Data:           sessao.horarioEscolhido.data,
     Hora:           sessao.horarioEscolhido.hora,
   });
