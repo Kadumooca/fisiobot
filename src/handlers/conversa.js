@@ -410,17 +410,4 @@ async function handleFAQ(telefone, texto) {
   return enviarMensagem(telefone, `${resposta}\n\n_Outra dúvida? Digite o número ou *0* para voltar._`);
 }
 
-function validarCPF(cpf) {
-  return cpf.replace(/\D/g, '').length === 11;
-}
-
-function limparCPF(cpf) {
-  return cpf.replace(/\D/g, '');
-}
-
-function formatarCPF(cpf) {
-  const c = cpf.replace(/\D/g, '');
-  return c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-}
-
 module.exports = { processarMensagem };
