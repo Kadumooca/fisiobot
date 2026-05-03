@@ -60,9 +60,17 @@ async function listarProcedimentos() {
 
 async function incluirAgendamento(payload) {
   try {
+    console.log('Payload agendamento:', JSON.stringify(payload));
     const { data } = await api.post('/agendamento/incluir', payload);
+    console.log('Resposta agendamento:', JSON.stringify(data));
     return data;
-  } catch (err) { console.error('Erro incluirAgendamento:', err.message); return null; }
+  } catch (err) { 
+    console.error('Erro incluirAgendamento:', err.message);
+    if (err.response) {
+      console.error('Resposta erro:', JSON.stringify(err.response.data));
+    }
+    return null; 
+  }
 }
 
 async function desmarcarAgendamento(agendamentoId) {
