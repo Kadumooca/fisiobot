@@ -4,7 +4,7 @@ const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
 const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
-
+const { buscarClientePorTelefone, salvarClientePorTelefone } = require('../utils/clienteCache');
 const TELEFONE_CLINICA = 'tel:+551122683195';
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
 
@@ -195,6 +195,19 @@ async function handleLissa(telefone, texto, sessao) {
 }
 
 async function handleTipoCliente(telefone, texto, sessao) {
+  // Verifica se já conhecemos esse paciente pelo telefone
+  const clienteSalvo = buscarClientePorTelefone(telefone);
+  if (clienteSalvo) {
+    setSessao(telefone, { cliente: clienteSalvo });
+    await enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊`);
+    switch (sessao.acao) {
+      case 'agendar':  return iniciarFluxoAgendamento(telefone, clienteSalvo);
+      case 'cancelar': return mostrarAgendamentos(telefone, clienteSalvo, 'cancelar');
+      case 'reagendar':return mostrarAgendamentos(telefone, clienteSalvo, 'reagendar');
+      case 'listar':   return mostrarAgendamentos(telefone, clienteSalvo, 'listar');
+    }
+  }
+
   if (texto === '1') {
     setSessao(telefone, { etapa: 'aguardando_cpf' });
     return enviarMensagem(telefone, `Por favor, informe seu *CPF* (somente números):\n\nExemplo: 12345678901`);
@@ -206,14 +219,17 @@ async function handleTipoCliente(telefone, texto, sessao) {
   return enviarMensagem(telefone, `Opção inválida. Digite *1* para paciente existente ou *2* para novo paciente.`);
 }
 
+
 async function handleCPF(telefone, texto, sessao) {
   if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
   const cpf = limparCPF(texto);
   await enviarMensagem(telefone, '🔍 Buscando seus dados...');
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (!cliente) return enviarMensagem(telefone,
-    `❌ CPF *${formatarCPF(cpf)}* não encontrado.\n\nVerifique o CPF ou digite *2* para se cadastrar.\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`
+    `❌ CPF *${formatarCPF(cpf)}* não encontrado.\n\nVerifique o CPF ou *0* para voltar ao menu.\n\n${CONTATO_HUMANO}`
   );
+  // Salva cliente no cache vinculado ao telefone
+  salvarClientePorTelefone(telefone, cliente);
   setSessao(telefone, { cliente });
   switch (sessao.acao) {
     case 'agendar':  return iniciarFluxoAgendamento(telefone, cliente);
@@ -245,6 +261,7 @@ async function handleEmailNovo(telefone, texto, sessao) {
     return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
   }
   const cliente = { Id: novoCliente, Nome: sessao.nomeNovo };
+  salvarClientePorTelefone(telefone, cliente);
   setSessao(telefone, { cliente });
   await enviarMensagem(telefone, `✅ Cadastro criado com sucesso, *${sessao.nomeNovo}*! 🎉`);
   return iniciarFluxoAgendamento(telefone, cliente);
