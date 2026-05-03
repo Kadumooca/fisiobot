@@ -2,7 +2,7 @@ const { getSessao, setSessao, resetarSessao } = require('../utils/sessao');
 const { enviarMensagem } = require('../services/whatsapp');
 const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
-const { validarCPF, limparCPF, formatarCPF, validarData } = require('../utils/formatters');
+const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
 
 const TELEFONE_CLINICA = 'tel:+551122683195';
@@ -23,55 +23,100 @@ Como posso te ajudar hoje?
 
 Digite o número da opção desejada.`;
 
-// Mapeamento de especialidades → períodos → agendas
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+// Mapeamento especialidade → períodos → agenda + procedimento
 const AGENDAS_POR_ESPECIALIDADE = {
   '1': {
     nome: 'Fisioterapia',
     periodos: [
-      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, agendaNome: 'Fisioterapia - Manhã' },
-      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, agendaNome: 'Fisioterapia - Tarde' },
+      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, procedimentoId: 5, agendaNome: 'Fisioterapia - Manhã' },
+      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, procedimentoId: 5, agendaNome: 'Fisioterapia - Tarde' },
     ]
   },
   '2': {
     nome: 'Hidroterapia',
     periodos: [
-      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, agendaNome: 'Hidroterapia - Manhã' },
-      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, agendaNome: 'Hidroterapia - Tarde' },
+      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, procedimentoId: 6, agendaNome: 'Hidroterapia - Manhã' },
+      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, procedimentoId: 6, agendaNome: 'Hidroterapia - Tarde' },
     ]
   },
   '3': {
     nome: 'Pilates',
     periodos: [
-      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, agendaNome: 'Pilates - Manhã' },
-      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, agendaNome: 'Pilates - Tarde' },
+      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, procedimentoId: 57, agendaNome: 'Pilates - Manhã' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 57, agendaNome: 'Pilates - Tarde' },
     ]
   },
   '4': {
     nome: 'RPG',
     periodos: [
-      { label: '🌅 Quinta manhã (8h às 11h)', agendaId: 6, agendaNome: 'RPG - Manhã quinta' },
-      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, agendaNome: 'RPG - Tarde' },
+      { label: '🌅 Quinta manhã (8h às 11h)', agendaId: 6, procedimentoId: 9, agendaNome: 'RPG - Manhã quinta' },
+      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, procedimentoId: 9, agendaNome: 'RPG - Tarde' },
     ]
   },
   '5': {
     nome: 'Acupuntura',
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 8, agendaNome: 'Acupuntura' },
+      { label: '📋 Ver horários disponíveis', agendaId: 8, procedimentoId: 1, agendaNome: 'Acupuntura' },
     ]
   },
   '6': {
     nome: 'Consulta Vascular',
+    diasBusca: 30,
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 11, agendaNome: 'Consulta Vascular' },
+      { label: '📋 Ver horários disponíveis', agendaId: 11, procedimentoId: 22, agendaNome: 'Consulta Vascular' },
     ]
   },
   '7': {
     nome: 'Drenagem / Massagem Relaxante',
     periodos: [
-      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, agendaNome: 'Drenagem / Massagem' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, agendaNome: 'Drenagem / Massagem' },
     ]
   },
 };
+
+// Formata data Date para dd/mm/aaaa
+function formatarData(date) {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const a = date.getFullYear();
+  return `${d}/${m}/${a}`;
+}
+
+// Busca horários disponíveis nos próximos N dias
+async function buscarProximosHorarios(agendaId, procedimentoId, diasBusca = 7) {
+  const horariosEncontrados = [];
+  const hoje = new Date();
+
+  for (let i = 1; i <= diasBusca; i++) {
+    const data = new Date(hoje);
+    data.setDate(hoje.getDate() + i);
+
+    // Pula domingos
+    if (data.getDay() === 0) continue;
+
+    const dataStr = formatarData(data);
+    const horarios = await fisiosoft.buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr);
+
+    if (horarios && horarios.length > 0) {
+      for (const hora of horarios) {
+        horariosEncontrados.push({
+          data: dataStr,
+          diaSemana: DIAS_SEMANA[data.getDay()],
+          hora: hora,
+          agendaId,
+          procedimentoId,
+        });
+      }
+    }
+
+    // Limita a 10 opções para não sobrecarregar a mensagem
+    if (horariosEncontrados.length >= 10) break;
+  }
+
+  return horariosEncontrados;
+}
 
 async function processarMensagem(telefone, mensagem) {
   const texto = mensagem.trim();
@@ -97,7 +142,6 @@ async function processarMensagem(telefone, mensagem) {
     case 'aguardando_email_novo':              return handleEmailNovo(telefone, texto, sessao);
     case 'aguardando_especialidade':           return handleEspecialidade(telefone, texto, sessao);
     case 'aguardando_periodo':                 return handlePeriodo(telefone, texto, sessao);
-    case 'aguardando_data':                    return handleData(telefone, texto, sessao);
     case 'aguardando_horario':                 return handleHorario(telefone, texto, sessao);
     case 'aguardando_confirmacao_agendamento': return handleConfirmacaoAgendamento(telefone, texto, sessao);
     case 'aguardando_cancelamento':            return handleCancelamento(telefone, texto, sessao);
@@ -218,8 +262,8 @@ async function iniciarFluxoAgendamento(telefone, cliente) {
     `*3.* 🧘 Pilates\n` +
     `*4.* 📐 RPG\n` +
     `*5.* 🪡 Acupuntura\n` +
-    `*6.* 🩺 Consulta Vascular\n\n` +
-    `*7.* 💆 Drenagem / Massagem Relaxante\n\n` +                    
+    `*6.* 🩺 Consulta Vascular\n` +
+    `*7.* 💆 Drenagem / Massagem Relaxante\n\n` +
     `*0* para voltar ao menu`
   );
 }
@@ -228,11 +272,10 @@ async function handleEspecialidade(telefone, texto, sessao) {
   const especialidade = AGENDAS_POR_ESPECIALIDADE[texto];
   if (!especialidade) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
 
-  // Se só tem um período, vai direto para data
   if (especialidade.periodos.length === 1) {
     const agenda = especialidade.periodos[0];
-    setSessao(telefone, { etapa: 'aguardando_data', agendaSelecionada: agenda });
-    return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\n📅 Para qual data deseja agendar?\n\nFormato *DD/MM/AAAA*:`);
+    const dias = especialidade.diasBusca || 7;
+    return buscarEMostrarHorarios(telefone, sessao.cliente, agenda, dias);
   }
 
   const lista = especialidade.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
@@ -246,36 +289,45 @@ async function handlePeriodo(telefone, texto, sessao) {
   if (isNaN(index) || index < 0 || index >= periodos.length) {
     return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${periodos.length}.`);
   }
-  const agendaSelecionada = periodos[index];
-  setSessao(telefone, { etapa: 'aguardando_data', agendaSelecionada });
-  return enviarMensagem(telefone, `✅ *${agendaSelecionada.label}*\n\n📅 Para qual data deseja agendar?\n\nFormato *DD/MM/AAAA*:`);
+  const agenda = periodos[index];
+  const dias = sessao.especialidade.diasBusca || 7;
+  return buscarEMostrarHorarios(telefone, sessao.cliente, agenda, dias);
 }
 
-async function handleData(telefone, texto, sessao) {
-  if (!validarData(texto)) return enviarMensagem(telefone, `Data inválida. Use o formato *DD/MM/AAAA*.\n\nExemplo: 15/05/2025`);
-  await enviarMensagem(telefone, '🔍 Buscando horários...');
-  const horarios = await fisiosoft.buscarHorariosDisponiveis(sessao.agendaSelecionada.agendaId, texto);
+async function buscarEMostrarHorarios(telefone, cliente, agenda, dias) {
+  await enviarMensagem(telefone, `🔍 Buscando horários disponíveis nos próximos ${dias} dias...`);
+  
+  const horarios = await buscarProximosHorarios(agenda.agendaId, agenda.procedimentoId, dias);
+
   if (!horarios || horarios.length === 0) {
-    return enviarMensagem(telefone, `😔 Sem horários disponíveis para *${texto}*.\n\nTente outra data ou *0* para voltar.\n\n${CONTATO_HUMANO}`);
+    return enviarMensagem(telefone,
+      `😔 Não encontrei horários disponíveis nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`
+    );
   }
-  const lista = horarios.map((h, i) => `*${i+1}.* ${h.Hora}`).join('\n');
-  setSessao(telefone, { etapa: 'aguardando_horario', dataSelecionada: texto, horarios });
-  return enviarMensagem(telefone, `✅ Horários disponíveis para *${texto}*:\n\n${lista}\n\nDigite o número:`);
+
+  const lista = horarios.map((h, i) =>
+    `*${i+1}.* ${h.diaSemana} ${h.data} às ${h.hora}`
+  ).join('\n');
+
+  setSessao(telefone, { etapa: 'aguardando_horario', agendaSelecionada: agenda, horariosDisponiveis: horarios, cliente });
+  return enviarMensagem(telefone,
+    `✅ *Horários disponíveis — ${agenda.agendaNome}:*\n\n${lista}\n\nDigite o número do horário desejado ou *0* para voltar.`
+  );
 }
 
 async function handleHorario(telefone, texto, sessao) {
   const index = parseInt(texto) - 1;
-  if (isNaN(index) || index < 0 || index >= sessao.horarios.length) {
-    return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horarios.length}.`);
+  if (isNaN(index) || index < 0 || index >= sessao.horariosDisponiveis.length) {
+    return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horariosDisponiveis.length}.`);
   }
-  const horarioEscolhido = sessao.horarios[index];
+  const horarioEscolhido = sessao.horariosDisponiveis[index];
   setSessao(telefone, { etapa: 'aguardando_confirmacao_agendamento', horarioEscolhido });
   return enviarMensagem(telefone,
     `📋 *Confirme o agendamento:*\n\n` +
     `👤 ${sessao.cliente.Nome}\n` +
     `💆 ${sessao.agendaSelecionada.agendaNome}\n` +
-    `📅 ${sessao.dataSelecionada}\n` +
-    `🕐 ${horarioEscolhido.Hora}\n\n` +
+    `📅 ${horarioEscolhido.diaSemana} ${horarioEscolhido.data}\n` +
+    `🕐 ${horarioEscolhido.hora}\n\n` +
     `*1* confirmar | *2* cancelar`
   );
 }
@@ -285,10 +337,11 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para cancelar.');
   await enviarMensagem(telefone, '⏳ Realizando agendamento...');
   const resultado = await fisiosoft.incluirAgendamento({
-    ClienteId: sessao.cliente.Id,
-    AgendaId:  sessao.agendaSelecionada.agendaId,
-    Data:      sessao.dataSelecionada,
-    Hora:      sessao.horarioEscolhido.Hora,
+    ClienteId:      sessao.cliente.Id,
+    AgendaId:       sessao.agendaSelecionada.agendaId,
+    ProcedimentoId: sessao.agendaSelecionada.procedimentoId,
+    Data:           sessao.horarioEscolhido.data,
+    Hora:           sessao.horarioEscolhido.hora,
   });
   resetarSessao(telefone);
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
@@ -296,7 +349,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n` +
     `💆 ${sessao.agendaSelecionada.agendaNome}\n` +
-    `📅 ${sessao.dataSelecionada} às ${sessao.horarioEscolhido.Hora}\n\n` +
+    `📅 ${sessao.horarioEscolhido.diaSemana} ${sessao.horarioEscolhido.data} às ${sessao.horarioEscolhido.hora}\n\n` +
     `Até lá! 😊\n\n_Clínica Lituânia — (11) 2268-3195_`
   );
 }
@@ -345,18 +398,29 @@ async function handleReagendamento(telefone, texto, sessao) {
   }
   const ag = sessao.agendamentos[index];
   await fisiosoft.desmarcarAgendamento(ag.Id);
-  setSessao(telefone, {
-    etapa: 'aguardando_data',
-    cliente: sessao.cliente,
-    agendaSelecionada: { agendaId: ag.AgendaId, agendaNome: ag.Profissional },
-  });
-  return enviarMensagem(telefone, `🔄 Agendamento de *${ag.Data}* removido.\n\nInforme a *nova data* (DD/MM/AAAA):`);
+
+  // Busca agenda correspondente
+  const agendaSelecionada = { agendaId: ag.AgendaId, procedimentoId: 5, agendaNome: ag.Profissional };
+  return buscarEMostrarHorarios(telefone, sessao.cliente, agendaSelecionada, 7);
 }
 
 async function handleFAQ(telefone, texto) {
   const resposta = buscarResposta(texto);
   if (!resposta) return enviarMensagem(telefone, `Opção inválida.\n\n${listarFAQs()}\n\n*0* para voltar.`);
   return enviarMensagem(telefone, `${resposta}\n\n_Outra dúvida? Digite o número ou *0* para voltar._`);
+}
+
+function validarCPF(cpf) {
+  return cpf.replace(/\D/g, '').length === 11;
+}
+
+function limparCPF(cpf) {
+  return cpf.replace(/\D/g, '');
+}
+
+function formatarCPF(cpf) {
+  const c = cpf.replace(/\D/g, '');
+  return c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 }
 
 module.exports = { processarMensagem };
