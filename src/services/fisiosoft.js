@@ -82,11 +82,16 @@ async function desmarcarAgendamento(agendamentoId) {
 
 async function listarAgendamentosCliente(clienteId) {
   try {
-    const { data } = await api.post('/agendamento/listar-agendamentos-cliente', { ClienteId: clienteId });
+    console.log('Buscando agendamentos cliente:', clienteId);
+    const { data } = await api.post('/agendamento/listar-agendamentos-cliente', { IdCliente: clienteId });
+    console.log('Resposta agendamentos:', JSON.stringify(data));
     return data.Dado;
-  } catch (err) { console.error('Erro listarAgendamentosCliente:', err.message); return null; }
+  } catch (err) { 
+    console.error('Erro listarAgendamentosCliente:', err.message);
+    if (err.response) console.error('Resposta erro:', JSON.stringify(err.response.data));
+    return null; 
+  }
 }
-
 module.exports = {
   buscarClientePorCPF,
   incluirCliente,
