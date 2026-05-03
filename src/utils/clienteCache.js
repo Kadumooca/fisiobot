@@ -1,38 +1,55 @@
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-const CACHE_FILE = path.join(__dirname, '../../data/clientes.json');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
-// Garante que o diretório existe
-function garantirDiretorio() {
-  const dir = path.dirname(CACHE_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function carregarCache() {
+// Cria a tabela se não existir
+async function inicializarTabela() {
   try {
-    garantirDiretorio();
-    if (!fs.existsSync(CACHE_FILE)) return {};
-    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-  } catch { return {}; }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS clientes_cache (
+        telefone VARCHAR(20) PRIMARY KEY,
+        cliente_id INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('Tabela clientes_cache pronta!');
+  } catch (err) {
+    console.error('Erro ao criar tabela:', err.message);
+  }
 }
 
-function salvarCache(cache) {
+async function buscarClientePorTelefone(telefone) {
   try {
-    garantirDiretorio();
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
-  } catch (err) { console.error('Erro ao salvar cache:', err.message); }
+    const result = await pool.query(
+      'SELECT cliente_id, nome FROM clientes_cache WHERE telefone = $1',
+      [telefone]
+    );
+    if (result.rows.length === 0) return null;
+    return { Id: result.rows[0].cliente_id, Nome: result.rows[0].nome };
+  } catch (err) {
+    console.error('Erro ao buscar cliente:', err.message);
+    return null;
+  }
 }
 
-function buscarClientePorTelefone(telefone) {
-  const cache = carregarCache();
-  return cache[telefone] || null;
+async function salvarClientePorTelefone(telefone, cliente) {
+  try {
+    await pool.query(`
+      INSERT INTO clientes_cache (telefone, cliente_id, nome, atualizado_em)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (telefone) DO UPDATE
+      SET cliente_id = $2, nome = $3, atualizado_em = NOW()
+    `, [telefone, cliente.Id, cliente.Nome]);
+  } catch (err) {
+    console.error('Erro ao salvar cliente:', err.message);
+  }
 }
 
-function salvarClientePorTelefone(telefone, cliente) {
-  const cache = carregarCache();
-  cache[telefone] = cliente;
-  salvarCache(cache);
-}
+inicializarTabela();
 
 module.exports = { buscarClientePorTelefone, salvarClientePorTelefone };
