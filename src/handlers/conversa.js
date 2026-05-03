@@ -25,50 +25,50 @@ Digite o número da opção desejada.`;
 
 // Mapeamento de especialidades → períodos → agendas
 const AGENDAS_POR_ESPECIALIDADE = {
-  '1': { // Fisioterapia
+  '1': {
     nome: 'Fisioterapia',
     periodos: [
-      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, agendaNome: 'EDUARDO - FISIOTERAPIA' },
-      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, agendaNome: 'EDSON - FISIOTERAPIA' },
+      { label: '🌅 Manhã (7h às 11h)', agendaId: 1, agendaNome: 'Fisioterapia - Manhã' },
+      { label: '🌆 Tarde (15h às 18h)', agendaId: 29, agendaNome: 'Fisioterapia - Tarde' },
     ]
   },
-  '2': { // Hidroterapia
+  '2': {
     nome: 'Hidroterapia',
     periodos: [
-      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, agendaNome: 'ELAINE - HIDROTERAPIA' },
-      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, agendaNome: 'FABIOLA - HIDROTERAPIA' },
+      { label: '🌅 Manhã (7h às 13h)', agendaId: 20, agendaNome: 'Hidroterapia - Manhã' },
+      { label: '🌆 Tarde (13h às 20h)', agendaId: 4, agendaNome: 'Hidroterapia - Tarde' },
     ]
   },
-  '3': { // Pilates
+  '3': {
     nome: 'Pilates',
     periodos: [
-      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, agendaNome: 'CARINA - PILATES' },
-      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, agendaNome: 'ALDINE - PILATES' },
+      { label: '🌅 Manhã (7h às 12h)', agendaId: 28, agendaNome: 'Pilates - Manhã' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, agendaNome: 'Pilates - Tarde' },
     ]
   },
-  '4': { // RPG
+  '4': {
     nome: 'RPG',
     periodos: [
-      { label: '🌅 Manhã quinta-feira (8h às 11h)', agendaId: 6, agendaNome: 'MELINA - RPG' },
-      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, agendaNome: 'MELINA - RPG' },
+      { label: '🌅 Quinta manhã (8h às 11h)', agendaId: 6, agendaNome: 'RPG - Manhã quinta' },
+      { label: '🌆 Tarde seg-quinta (15h às 19h)', agendaId: 6, agendaNome: 'RPG - Tarde' },
     ]
   },
-  '5': { // Acupuntura
+  '5': {
     nome: 'Acupuntura',
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 8, agendaNome: 'RITA - ACUPUNTURA' },
+      { label: '📋 Ver horários disponíveis', agendaId: 8, agendaNome: 'Acupuntura' },
     ]
   },
-  '6': { // Vascular
+  '6': {
     nome: 'Consulta Vascular',
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 11, agendaNome: 'DR CARLOS - VASCULAR' },
+      { label: '📋 Ver horários disponíveis', agendaId: 11, agendaNome: 'Consulta Vascular' },
     ]
   },
-  '7': { // Drenagem
-    nome: 'Drenagem / Massagem',
+  '7': {
+    nome: 'Drenagem / Massagem Relaxante',
     periodos: [
-      { label: '📋 Ver horários disponíveis', agendaId: 1, agendaNome: 'DRENAGEM' },
+      { label: '🌆 Tarde (15h às 19h)', agendaId: 7, agendaNome: 'Drenagem / Massagem' },
     ]
   },
 };
@@ -218,8 +218,8 @@ async function iniciarFluxoAgendamento(telefone, cliente) {
     `*3.* 🧘 Pilates\n` +
     `*4.* 📐 RPG\n` +
     `*5.* 🪡 Acupuntura\n` +
-    `*6.* 🩺 Consulta Vascular\n` +
-    `*7.* 💆 Drenagem / Massagem\n\n` +
+    `*6.* 🩺 Consulta Vascular\n\n` +
+    `*7.* 💆 Drenagem / Massagem Relaxante\n\n` +                    
     `*0* para voltar ao menu`
   );
 }
