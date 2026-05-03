@@ -139,6 +139,7 @@ async function processarMensagem(telefone, mensagem) {
     case 'conversando_com_lissa':              return handleLissa(telefone, texto, sessao);
     case 'aguardando_tipo_cliente':            return handleTipoCliente(telefone, texto, sessao);
     case 'aguardando_cpf':                     return handleCPF(telefone, texto, sessao);
+    case 'aguardando_cpf_novo':                return handleCPFNovo(telefone, texto, sessao);
     case 'aguardando_nome_novo':               return handleNomeNovo(telefone, texto, sessao);
     case 'aguardando_celular_novo':            return handleCelularNovo(telefone, texto, sessao);
     case 'aguardando_email_novo':              return handleEmailNovo(telefone, texto, sessao);
@@ -244,8 +245,15 @@ async function handleCPF(telefone, texto, sessao) {
 
 async function handleNomeNovo(telefone, texto, sessao) {
   if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe seu *nome completo*:`);
-  setSessao(telefone, { etapa: 'aguardando_celular_novo', nomeNovo: texto });
-  return enviarMensagem(telefone, `Olá, *${texto}*! 😊\n\nQual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
+  setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto });
+  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
+}
+
+async function handleCPFNovo(telefone, texto, sessao) {
+  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
+  const cpf = limparCPF(texto);
+  setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: cpf });
+  return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
 }
 
 async function handleCelularNovo(telefone, texto, sessao) {
@@ -258,7 +266,13 @@ async function handleCelularNovo(telefone, texto, sessao) {
 async function handleEmailNovo(telefone, texto, sessao) {
   const email = texto.toLowerCase() === 'pular' ? '' : texto;
   await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
-  const novoCliente = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Celular: sessao.celularNovo, Email: email });
+  const novoCliente = await fisiosoft.incluirCliente({
+    Nome: sessao.nomeNovo,
+    Cpf: sessao.cpfNovo,
+    Celular: sessao.celularNovo,
+    Email: email,
+    Sexo: 'F',
+  });
   if (!novoCliente) {
     resetarSessao(telefone);
     return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
@@ -373,7 +387,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   await marcarAgendou(telefone);
 
   return enviarMensagem(telefone,
-    `✅ *Agendamento confirmado!*\n\n`
+    `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n` +
     `💆 ${sessao.agendaSelecionada.agendaNome}\n` +
     `📅 ${sessao.horarioEscolhido.diaSemana} ${sessao.horarioEscolhido.data} às ${sessao.horarioEscolhido.hora}\n\n` +
