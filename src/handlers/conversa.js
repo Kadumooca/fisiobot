@@ -92,8 +92,8 @@ async function buscarProximosHorarios(agendaId, procedimentoId, diasBusca = 7) {
     const data = new Date(hoje);
     data.setDate(hoje.getDate() + i);
 
-    // Pula domingos
-    if (data.getDay() === 0) continue;
+    // Pula sábados e domingos
+if (data.getDay() === 0 || data.getDay() === 6) continue;
 
     const dataStr = formatarData(data);
     const horarios = await fisiosoft.buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr);
