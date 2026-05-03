@@ -340,8 +340,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     IdCliente:      sessao.cliente.Id,
     IdAgenda:       sessao.agendaSelecionada.agendaId,
     IdProcedimento: sessao.agendaSelecionada.procedimentoId,
-    IdConvenio:     0,
-    IdProfissional: 0,
+    IdProfissional: sessao.agendaSelecionada.idProfissional || 0,
     Data:           sessao.horarioEscolhido.data,
     Hora:           sessao.horarioEscolhido.hora,
   });
