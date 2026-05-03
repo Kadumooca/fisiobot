@@ -41,16 +41,16 @@ async function listarAgendasPorEspecialidade(especialidade) {
   } catch (err) { console.error('Erro listarAgendasPorEspecialidade:', err.message); return null; }
 }
 
-async function buscarHorariosDisponiveis(agendaId, dataStr) {
+async function buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr) {
   try {
     const { data } = await api.post('/agenda/buscar-horarios-disponiveis', { 
-      IdAgenda: agendaId, 
+      IdAgenda: agendaId,
+      IdProcedimento: procedimentoId,
       Data: dataStr 
     });
     return data.Dado;
   } catch (err) { console.error('Erro buscarHorarios:', err.message); return null; }
 }
-
 async function listarProcedimentos() {
   try {
     const { data } = await api.post('/procedimento/listar', {});
