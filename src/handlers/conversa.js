@@ -196,7 +196,7 @@ async function handleLissa(telefone, texto, sessao) {
 
 async function handleTipoCliente(telefone, texto, sessao) {
   // Verifica se já conhecemos esse paciente pelo telefone
-  const clienteSalvo = buscarClientePorTelefone(telefone);
+ const clienteSalvo = await buscarClientePorTelefone(telefone);
   if (clienteSalvo) {
     setSessao(telefone, { cliente: clienteSalvo });
     await enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊`);
