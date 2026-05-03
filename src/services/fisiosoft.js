@@ -43,7 +43,10 @@ async function listarAgendasPorEspecialidade(especialidade) {
 
 async function buscarHorariosDisponiveis(agendaId, dataStr) {
   try {
-    const { data } = await api.post('/agenda/buscar-horarios-disponiveis', { AgendaId: agendaId, Data: dataStr });
+    const { data } = await api.post('/agenda/buscar-horarios-disponiveis', { 
+      IdAgenda: agendaId, 
+      Data: dataStr 
+    });
     return data.Dado;
   } catch (err) { console.error('Erro buscarHorarios:', err.message); return null; }
 }
