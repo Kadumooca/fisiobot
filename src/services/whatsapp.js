@@ -1,20 +1,13 @@
 const axios = require('axios');
 
-const evolution = axios.create({
-  baseURL: process.env.EVOLUTION_API_URL,
-  headers: {
-    apikey: process.env.EVOLUTION_API_KEY,
-    'Content-Type': 'application/json',
-  },
-});
-
-const INSTANCE = process.env.EVOLUTION_INSTANCE;
-
-async function enviarMensagem(telefone, texto) {
+async function enviarMensagem(telefone, mensagem) {
   try {
-    await evolution.post(`/message/sendText/${INSTANCE}`, {
+    const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
+    await axios.post(url, {
       number: telefone,
-      text: texto,
+      text: mensagem,
+    }, {
+      headers: { apikey: process.env.EVOLUTION_API_KEY },
     });
   } catch (err) {
     console.error('Erro ao enviar mensagem:', err.message);
