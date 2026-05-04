@@ -1,18 +1,18 @@
-const { buscarLeadsParaRemarketing, atualizarTentativaRemarketing, marcarRespondeuRemarketing } = require('../utils/clienteCache');
+const { buscarLeadsParaRemarketing, atualizarTentativaRemarketing } = require('../utils/clienteCache');
 const { enviarMensagem } = require('../services/whatsapp');
 
 const VANTAGENS = {
-  'Fisioterapia': `✨ Na Clínica Lituânia oferecemos *avaliação gratuita* e atendimento individualizado com fisioterapeutas especializados!`,
-  'Hidroterapia': `✨ Nossa piscina aquecida a 34°C com atendimento *individual* é ideal para reabilitação e alívio de dores crônicas!`,
-  'Pilates': `✨ Nosso Pilates tem turmas com no máximo 3 alunos, conduzido por fisioterapeutas, e você pode fazer uma *aula experimental gratuita*!`,
-  'RPG': `✨ O RPG é excelente para correção postural e alívio de dores crônicas, com resultados visíveis já nas primeiras sessões!`,
-  'Acupuntura': `✨ Nossa acupuntura é realizada por profissional especializada e atende diversas condições com resultados comprovados!`,
-  'Consulta Vascular': `✨ O Dr. Carlos é especialista vascular e realiza consultas e procedimentos com alta qualidade e atenção individualizada!`,
-  'Drenagem / Massagem': `✨ Nossa drenagem linfática e massagem relaxante são realizadas por fisioterapeutas especializados!`,
+  'Fisioterapia': '✨ Na Clínica Lituânia oferecemos *avaliação gratuita* e atendimento individualizado com fisioterapeutas especializados!',
+  'Hidroterapia': '✨ Nossa piscina aquecida a 34°C com atendimento *individual* é ideal para reabilitação e alívio de dores crônicas!',
+  'Pilates': '✨ Nosso Pilates tem turmas com no máximo 3 alunos, conduzido por fisioterapeutas, e você pode fazer uma *aula experimental gratuita*!',
+  'RPG': '✨ O RPG é excelente para correção postural e alívio de dores crônicas, com resultados visíveis já nas primeiras sessões!',
+  'Acupuntura': '✨ Nossa acupuntura é realizada por profissional especializada e atende diversas condições com resultados comprovados!',
+  'Consulta Vascular': '✨ O Dr. Carlos é especialista vascular e realiza consultas e procedimentos com alta qualidade e atenção individualizada!',
+  'Drenagem / Massagem Relaxante': '✨ Nossa drenagem linfática e massagem relaxante são realizadas por fisioterapeutas especializados!',
 };
 
 function gerarMensagem1(nome, especialidade) {
-  const vantagem = VANTAGENS[especialidade] || `✨ Na Clínica Lituânia oferecemos atendimento especializado e individualizado!`;
+  const vantagem = VANTAGENS[especialidade] || '✨ Na Clínica Lituânia oferecemos atendimento especializado e individualizado!';
   const primeiroNome = nome ? nome.split(' ')[0] : 'olá';
   return (
     `Olá, *${primeiroNome}*! 😊 Aqui é a Lissa da *Clínica Lituânia*.\n\n` +
@@ -37,37 +37,23 @@ function gerarMensagem2(nome, especialidade) {
 async function executarRemarketing() {
   const agora = new Date();
   const hora = agora.getHours();
-
-  // Só executa entre 9h e 18h
-  if (hora < 9 || hora >= 18) {
-    console.log('Fora do horário de remarketing.');
-    return;
-  }
-
+  if (hora < 9 || hora >= 18) { console.log('Fora do horário de remarketing.'); return; }
   console.log('Iniciando remarketing...');
   const leads = await buscarLeadsParaRemarketing();
   console.log(`${leads.length} leads para remarketing.`);
-
   for (const lead of leads) {
     try {
-      let mensagem;
-      if (lead.tentativas_remarketing === 0) {
-        mensagem = gerarMensagem1(lead.nome, lead.especialidade);
-      } else {
-        mensagem = gerarMensagem2(lead.nome, lead.especialidade);
-      }
-
+      const mensagem = lead.tentativas_remarketing === 0
+        ? gerarMensagem1(lead.nome, lead.especialidade)
+        : gerarMensagem2(lead.nome, lead.especialidade);
       await enviarMensagem(lead.telefone, mensagem);
       await atualizarTentativaRemarketing(lead.telefone);
       console.log(`Remarketing enviado para ${lead.telefone} (tentativa ${lead.tentativas_remarketing + 1})`);
-
-      // Aguarda 3 segundos entre cada envio para não sobrecarregar
       await new Promise(r => setTimeout(r, 3000));
     } catch (err) {
-      console.error(`Erro ao enviar remarketing para ${lead.telefone}:`, err.message);
+      console.error(`Erro remarketing para ${lead.telefone}:`, err.message);
     }
   }
-
   console.log('Remarketing concluído!');
 }
 
