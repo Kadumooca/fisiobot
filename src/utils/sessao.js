@@ -1,13 +1,3 @@
-// Armazena o estado da conversa de cada usuário em memória
-// Exemplo de sessão:
-// {
-//   etapa: 'menu' | 'encerrado' | 'aguardando_cpf' | 'aguardando_nome' | 'aguardando_data' | 'aguardando_horario' | 'aguardando_confirmacao_cancel',
-//   paciente: { id, nome, cpf },
-//   agendamentoTemp: { data, horario, horarioId },
-//   agendamentoParaCancelar: { id, descricao }
-// }
-// Obs: etapa 'encerrado' bloqueia o bot até o cliente enviar uma saudação.
-
 const sessoes = new Map();
 
 function getSessao(telefone) {
