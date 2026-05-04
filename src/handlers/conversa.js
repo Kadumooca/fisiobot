@@ -251,12 +251,60 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     return enviarMensagem(telefone, `❌ Erro ao realizar agendamento. Tente novamente ou entre em contato com a recepção.\n\nDigite *0* para voltar ao menu.`);
   }
 
-  return enviarMensagem(telefone,
+  const procedimento = sessao.procedimentoSelecionado.Nome.toUpperCase();
+
+  // Mensagem 1 — Confirmação
+  await enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n` +
     `📅 ${sessao.dataSelecionada} às ${sessao.horarioEscolhido.Hora}\n` +
     `💆 ${sessao.procedimentoSelecionado.Nome}\n\n` +
-    `Até lá! 😊\n\nDigite *0* para voltar ao menu.`
+    `📍 *Clínica Lituânia*\n` +
+    `Rua Lituânia, 209 - Mooca\n` +
+    `CEP 03184-020 - São Paulo/SP\n\n` +
+    `📞 (11) 2268-3195\n` +
+    `📱 WhatsApp: (11) 98728-1427\n\n` +
+    `Até lá! 😊`
+  );
+
+  // Mensagem 2 — Orientações gerais para todos
+  let roupaEspecifica = '';
+  if (procedimento.includes('JOELHO') || procedimento.includes('QUADRIL')) {
+    roupaEspecifica = `\n✅ *Roupa:* Bermuda ou shorts confortável`;
+  } else if (procedimento.includes('OMBRO')) {
+    roupaEspecifica = `\n✅ *Roupa:* Regata ou blusa de alça`;
+  } else if (procedimento.includes('PILATES')) {
+    roupaEspecifica = `\n✅ *Roupa:* Roupa leve e sapatilha`;
+  } else if (procedimento.includes('RPG')) {
+    roupaEspecifica = `\n✅ *Roupa:* Roupa leve para ginástica`;
+  } else {
+    roupaEspecifica = `\n✅ *Roupa:* Roupa leve e adequada para o tratamento`;
+  }
+
+  await enviarMensagem(telefone,
+    `📋 *Orientações para sua consulta:*\n\n` +
+    `📁 Traga seus *exames* e *encaminhamento médico* (se houver)` +
+    roupaEspecifica
+  );
+
+  // Mensagem 3 — Orientações específicas da Hidroterapia
+  if (procedimento.includes('HIDROTERAPIA')) {
+    await enviarMensagem(telefone,
+      `🏊 *Orientações para Hidroterapia:*\n\n` +
+      `✅ *Traje obrigatório:* Sunga ou maiô, touca, chinelo, roupão e toalha\n` +
+      `❌ *Proibido adornos:* Brincos, correntes, pulseiras, anéis, etc\n` +
+      `❌ *Proibido na piscina:* Cremes, óleos corporais e produtos de perfumaria\n` +
+      `⚠️ *Atenção:* Ferimentos, uso de sondas ou alergias de pele impedem o uso da piscina`
+    );
+  }
+
+  return enviarMensagem(telefone,
+    `📌 *Informação importante:*\n\n` +
+    `O horário agendado é *pontual e não fixo*. Para dar continuidade ao seu tratamento, as próximas sessões deverão ser agendadas diretamente na clínica, conforme a disponibilidade de agenda.\n\n` +
+    `Nossa secretaria ficará feliz em te ajudar a garantir a sequência do seu tratamento! 🤝\n\n` +
+    `📞 (11) 2268-3195\n` +
+    `📱 WhatsApp: (11) 98728-1427\n\n` +
+    `Digite *0* para encerrar.`
   );
 }
 
