@@ -22,7 +22,6 @@ async function incluirCliente(payload) {
   } catch (err) { console.error('Erro incluirCliente:', err.message); return null; }
 }
 
-// Retorna todas as agendas
 async function listarAgendas() {
   try {
     const { data } = await api.post('/agenda/listar', {});
@@ -30,32 +29,13 @@ async function listarAgendas() {
   } catch (err) { console.error('Erro listarAgendas:', err.message); return null; }
 }
 
-// Filtra agendas pela especialidade escolhida
-async function listarAgendasPorEspecialidade(especialidade) {
-  try {
-    const { data } = await api.post('/agenda/listar', {});
-    const agendas = data.Dado || [];
-    return agendas.filter(a => 
-      a.Nome.toUpperCase().includes(especialidade.toUpperCase())
-    );
-  } catch (err) { console.error('Erro listarAgendasPorEspecialidade:', err.message); return null; }
-}
-
 async function buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr) {
   try {
-    const { data } = await api.post('/agenda/buscar-horarios-disponiveis', { 
-      IdAgenda: agendaId,
-      IdProcedimento: procedimentoId,
-      Data: dataStr 
+    const { data } = await api.post('/agenda/buscar-horarios-disponiveis', {
+      IdAgenda: agendaId, IdProcedimento: procedimentoId, Data: dataStr
     });
     return data.Dado;
   } catch (err) { console.error('Erro buscarHorarios:', err.message); return null; }
-}
-async function listarProcedimentos() {
-  try {
-    const { data } = await api.post('/procedimento/listar', {});
-    return data.Dado;
-  } catch (err) { console.error('Erro listarProcedimentos:', err.message); return null; }
 }
 
 async function incluirAgendamento(payload) {
@@ -64,12 +44,10 @@ async function incluirAgendamento(payload) {
     const { data } = await api.post('/agendamento/incluir', payload);
     console.log('Resposta agendamento:', JSON.stringify(data));
     return data;
-  } catch (err) { 
+  } catch (err) {
     console.error('Erro incluirAgendamento:', err.message);
-    if (err.response) {
-      console.error('Resposta erro:', JSON.stringify(err.response.data));
-    }
-    return null; 
+    if (err.response) console.error('Resposta erro:', JSON.stringify(err.response.data));
+    return null;
   }
 }
 
@@ -79,29 +57,25 @@ async function desmarcarAgendamento(agendamentoId) {
     const { data } = await api.post('/agendamento/desmarcar', { IdAgendamento: agendamentoId });
     console.log('Resposta desmarcar:', JSON.stringify(data));
     return data;
-  } catch (err) { 
+  } catch (err) {
     console.error('Erro desmarcarAgendamento:', err.message);
     if (err.response) console.error('Resposta erro desmarcar:', JSON.stringify(err.response.data));
-    return null; 
+    return null;
   }
 }
+
 async function listarAgendamentosCliente(clienteId) {
   try {
     const { data } = await api.post('/agendamento/listar-agendamentos-cliente', { IdCliente: clienteId });
     return data.Dado;
-  } catch (err) { 
+  } catch (err) {
     console.error('Erro listarAgendamentosCliente:', err.message);
-    return null; 
+    return null;
   }
 }
+
 module.exports = {
-  buscarClientePorCPF,
-  incluirCliente,
-  listarAgendas,
-  listarAgendasPorEspecialidade,
-  buscarHorariosDisponiveis,
-  listarProcedimentos,
-  incluirAgendamento,
-  desmarcarAgendamento,
-  listarAgendamentosCliente,
+  buscarClientePorCPF, incluirCliente, listarAgendas,
+  buscarHorariosDisponiveis, incluirAgendamento,
+  desmarcarAgendamento, listarAgendamentosCliente,
 };
