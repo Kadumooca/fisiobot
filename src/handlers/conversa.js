@@ -29,6 +29,13 @@ Digite o número da opção desejada.`;
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+const ETAPAS_AGENDAMENTO = [
+  'aguardando_especialidade', 'aguardando_periodo',
+  'aguardando_horario', 'aguardando_cancelamento',
+  'aguardando_reagendamento', 'aguardando_confirmacao_agendamento',
+  'aguardando_confirmacao_cancel'
+];
+
 const AGENDAS_POR_ESPECIALIDADE = {
   '1': {
     nome: 'Fisioterapia',
@@ -156,6 +163,10 @@ async function processarMensagem(telefone, mensagem) {
   }
 
   if (texto === '0' || textoLower === 'sair') {
+    if (ETAPAS_AGENDAMENTO.includes(sessao.etapa)) {
+      setSessao(telefone, { etapa: 'menu' });
+      return enviarMensagem(telefone, MENU_PRINCIPAL);
+    }
     setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `✅ Atendimento encerrado. Até logo! 😊\n\nQuando precisar, é só nos enviar um *Olá*.`);
   }
@@ -283,7 +294,6 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     return;
   }
 
-  // Resposta ambígua — volta para a Lissa conversar
   setSessao(telefone, { etapa: 'conversando_com_lissa' });
   return handleLissa(telefone, texto, sessao);
 }
@@ -375,10 +385,6 @@ async function iniciarFluxoAgendamento(telefone, cliente) {
 }
 
 async function handleEspecialidade(telefone, texto, sessao) {
-  if (texto === '0') {
-    setSessao(telefone, { etapa: 'menu' });
-    return enviarMensagem(telefone, MENU_PRINCIPAL);
-  }
   const especialidade = AGENDAS_POR_ESPECIALIDADE[texto];
   if (!especialidade) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
   await registrarLead(telefone, sessao.cliente?.Nome, especialidade.nome);
@@ -391,10 +397,6 @@ async function handleEspecialidade(telefone, texto, sessao) {
 }
 
 async function handlePeriodo(telefone, texto, sessao) {
-  if (texto === '0') {
-    setSessao(telefone, { etapa: 'menu' });
-    return enviarMensagem(telefone, MENU_PRINCIPAL);
-  }
   const index = parseInt(texto) - 1;
   const periodos = sessao.especialidade.periodos;
   if (isNaN(index) || index < 0 || index >= periodos.length)
@@ -413,10 +415,6 @@ async function buscarEMostrarHorarios(telefone, cliente, agenda, dias) {
 }
 
 async function handleHorario(telefone, texto, sessao) {
-  if (texto === '0') {
-    setSessao(telefone, { etapa: 'menu' });
-    return enviarMensagem(telefone, MENU_PRINCIPAL);
-  }
   const index = parseInt(texto) - 1;
   if (isNaN(index) || index < 0 || index >= sessao.horariosDisponiveis.length)
     return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horariosDisponiveis.length}.`);
