@@ -27,13 +27,6 @@ Digite o número da opção desejada.`;
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-const ETAPAS_AGENDAMENTO = [
-  'aguardando_especialidade', 'aguardando_periodo',
-  'aguardando_horario', 'aguardando_cancelamento',
-  'aguardando_reagendamento', 'aguardando_confirmacao_agendamento',
-  'aguardando_confirmacao_cancel'
-];
-
 const AGENDAS_POR_ESPECIALIDADE = {
   '1': {
     nome: 'Fisioterapia',
@@ -160,11 +153,12 @@ async function processarMensagem(telefone, mensagem) {
     return;
   }
 
-  if (texto === '0' || textoLower === 'sair') {
-    if (ETAPAS_AGENDAMENTO.includes(sessao.etapa)) {
-      setSessao(telefone, { etapa: 'menu' });
-      return enviarMensagem(telefone, MENU_PRINCIPAL);
-    }
+  // Voltar ao anterior com 0
+  if (texto === '0') {
+    return voltarAnterior(telefone, sessao);
+  }
+
+  if (textoLower === 'sair') {
     setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `✅ Atendimento encerrado. Até logo! 😊\n\nQuando precisar, é só nos enviar um *Olá*.`);
   }
@@ -196,6 +190,50 @@ async function processarMensagem(telefone, mensagem) {
       setSessao(telefone, { etapa: 'menu' });
       return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
+}
+
+async function voltarAnterior(telefone, sessao) {
+  switch (sessao.etapa) {
+    case 'aguardando_horario':
+      // Volta para período se tinha período, senão para especialidades
+      if (sessao.especialidade && sessao.especialidade.periodos.length > 1) {
+        const lista = sessao.especialidade.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
+        setSessao(telefone, { etapa: 'aguardando_periodo' });
+        return enviarMensagem(telefone, `✅ *${sessao.especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número ou *0* para voltar.`);
+      }
+      // Sem período — volta para especialidades
+      return voltarParaEspecialidades(telefone, sessao);
+
+    case 'aguardando_periodo':
+      return voltarParaEspecialidades(telefone, sessao);
+
+    case 'aguardando_especialidade':
+    case 'aguardando_faq':
+    case 'conversando_com_lissa':
+    case 'aguardando_resposta_agendamento':
+    case 'aguardando_tipo_cliente':
+    case 'aguardando_cpf':
+    case 'aguardando_cpf_novo':
+    case 'aguardando_nome_novo':
+    case 'aguardando_celular_novo':
+    case 'aguardando_email_novo':
+    case 'aguardando_cancelamento':
+    case 'aguardando_reagendamento':
+    case 'aguardando_confirmacao_agendamento':
+    case 'aguardando_confirmacao_cancel':
+    default:
+      setSessao(telefone, { etapa: 'menu' });
+      return enviarMensagem(telefone, MENU_PRINCIPAL);
+  }
+}
+
+async function voltarParaEspecialidades(telefone, sessao) {
+  setSessao(telefone, { etapa: 'aguardando_especialidade', cliente: sessao.cliente });
+  return enviarMensagem(telefone,
+    `✅ Olá, *${sessao.cliente?.Nome || ''}*!\n\nQual especialidade deseja agendar?\n\n` +
+    `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
+    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem Relaxante\n\n*0* para voltar ao menu`
+  );
 }
 
 async function handleMenu(telefone, texto) {
@@ -384,11 +422,11 @@ async function handleEspecialidade(telefone, texto, sessao) {
   if (!especialidade) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
   await registrarLead(telefone, sessao.cliente?.Nome, especialidade.nome);
   if (especialidade.periodos.length === 1) {
-    return buscarEMostrarHorarios(telefone, sessao.cliente, especialidade.periodos[0], especialidade.diasBusca || 7);
+    return buscarEMostrarHorarios(telefone, sessao.cliente, especialidade.periodos[0], especialidade.diasBusca || 7, especialidade);
   }
   const lista = especialidade.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
   setSessao(telefone, { etapa: 'aguardando_periodo', especialidade });
-  return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número:`);
+  return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número ou *0* para voltar.`);
 }
 
 async function handlePeriodo(telefone, texto, sessao) {
@@ -396,16 +434,16 @@ async function handlePeriodo(telefone, texto, sessao) {
   const periodos = sessao.especialidade.periodos;
   if (isNaN(index) || index < 0 || index >= periodos.length)
     return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${periodos.length}.`);
-  return buscarEMostrarHorarios(telefone, sessao.cliente, periodos[index], sessao.especialidade.diasBusca || 7);
+  return buscarEMostrarHorarios(telefone, sessao.cliente, periodos[index], sessao.especialidade.diasBusca || 7, sessao.especialidade);
 }
 
-async function buscarEMostrarHorarios(telefone, cliente, agenda, dias) {
+async function buscarEMostrarHorarios(telefone, cliente, agenda, dias, especialidade) {
   await enviarMensagem(telefone, `🔍 Buscando horários disponíveis nos próximos ${dias} dias...`);
   const horarios = await buscarProximosHorarios(agenda.agendaId, agenda.procedimentoId, dias);
   if (!horarios || horarios.length === 0)
-    return enviarMensagem(telefone, `😔 Não encontrei horários disponíveis nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
+    return enviarMensagem(telefone, `😔 Não encontrei horários disponíveis nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}\n\n*0* para voltar.`);
   const lista = horarios.map((h, i) => `*${i+1}.* ${h.diaSemana} ${h.data} às ${h.hora}`).join('\n');
-  setSessao(telefone, { etapa: 'aguardando_horario', agendaSelecionada: agenda, horariosDisponiveis: horarios, cliente });
+  setSessao(telefone, { etapa: 'aguardando_horario', agendaSelecionada: agenda, horariosDisponiveis: horarios, cliente, especialidade });
   return enviarMensagem(telefone, `✅ *Horários disponíveis — ${agenda.agendaNome}:*\n\n${lista}\n\nDigite o número do horário desejado ou *0* para voltar.`);
 }
 
@@ -561,7 +599,7 @@ async function handleReagendamento(telefone, texto, sessao) {
   const ag = sessao.agendamentos[index];
   await fisiosoft.desmarcarAgendamento(ag.IdAgendamento);
   const agendaSelecionada = { agendaId: ag.IdAgenda, procedimentoId: ag.IdProcedimento, idProfissional: ag.IdProfissional, agendaNome: ag.Procedimento };
-  return buscarEMostrarHorarios(telefone, sessao.cliente, agendaSelecionada, 7);
+  return buscarEMostrarHorarios(telefone, sessao.cliente, agendaSelecionada, 7, null);
 }
 
 async function handleFAQ(telefone, texto) {
