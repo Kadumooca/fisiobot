@@ -2,7 +2,7 @@ const sessoes = new Map();
 
 function getSessao(telefone) {
   if (!sessoes.has(telefone)) {
-    sessoes.set(telefone, { etapa: 'menu' });
+    sessoes.set(telefone, { etapa: 'encerrado' });
   }
   return sessoes.get(telefone);
 }
