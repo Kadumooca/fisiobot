@@ -43,6 +43,9 @@ async function incluirAgendamento(payload) {
     console.log('Payload agendamento:', JSON.stringify(payload));
     const { data } = await api.post('/agendamento/incluir', payload);
     console.log('Resposta agendamento:', JSON.stringify(data));
+    if (data.Dado === 0 && data.Mensagem) {
+      return { erro: data.Mensagem };
+    }
     return data;
   } catch (err) {
     console.error('Erro incluirAgendamento:', err.message);
