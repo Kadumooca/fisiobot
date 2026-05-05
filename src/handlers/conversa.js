@@ -25,6 +25,7 @@ Como posso te ajudar hoje?
 Digite o número da opção desejada.`;
 
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
+const FRASES_SITE = ['olá, gostaria de mais informações', 'ola, gostaria de mais informacoes', 'gostaria de mais informações', 'gostaria de mais informacoes'];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const AGENDAS_POR_ESPECIALIDADE = {
@@ -146,7 +147,8 @@ async function processarMensagem(telefone, mensagem) {
 
   if (sessao.etapa === 'encerrado') {
     const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
-    if (ativou) {
+    const ativouSite = FRASES_SITE.some(p => textoLower.includes(p));
+    if (ativou || ativouSite) {
       resetarSessao(telefone);
       return enviarMensagem(telefone, MENU_PRINCIPAL);
     }
