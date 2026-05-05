@@ -4,8 +4,8 @@ const { processarMensagem } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 
 const app = express();
-app.use(express.json());
-
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
