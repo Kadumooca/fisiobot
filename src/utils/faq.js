@@ -32,4 +32,8 @@ function listarFAQs() {
 
 function buscarResposta(numero) {
   if (numero === '0') return null;
-  const faq = faqs.find((f) => f.id === String
+  const faq = faqs.find((f) => f.id === String(numero));
+  return faq ? faq.resposta : null;
+}
+
+module.exports = { listarFAQs, buscarResposta };
