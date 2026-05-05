@@ -143,8 +143,9 @@ async function processarMensagem(telefone, mensagem) {
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
 
+  // Encerrado — só reativa com palavra exata
   if (sessao.etapa === 'encerrado') {
-    const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p || textoLower.startsWith(p + ' '));
+    const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
     if (ativou) {
       resetarSessao(telefone);
       return enviarMensagem(telefone, MENU_PRINCIPAL);
@@ -199,8 +200,8 @@ async function handleMenu(telefone, texto) {
       setSessao(telefone, { etapa: 'aguardando_faq' });
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
     case '7':
-      resetarSessao(telefone);
-      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\n${ENDERECO}\n\nClique para falar via WhatsApp: ${WHATSAPP_RECEPCAO}`);
+      setSessao(telefone, { etapa: 'encerrado' });
+      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\n${ENDERECO}\n\nClique para falar via WhatsApp: ${WHATSAPP_RECEPCAO}\n\nQuando precisar novamente, é só enviar um *Olá*. 😊`);
     default:
       return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
   }
@@ -389,7 +390,6 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
   const regiao = sessao.regiaoCorpo || null;
 
-  // Mensagem 1 — Confirmação
   await enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
@@ -398,7 +398,6 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     `Até lá! 😊`
   );
 
-  // Mensagem 2 — Orientações específicas por especialidade
   if (nomeAgenda.includes('FISIOTERAPIA')) {
     const orientacaoRoupa = gerarOrientacaoRoupa(regiao);
     await enviarMensagem(telefone,
@@ -443,7 +442,6 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     );
   }
 
-  // Encerra sessão — só reativa com palavra de ativação
   setSessao(telefone, { etapa: 'encerrado' });
 }
 
@@ -451,8 +449,9 @@ async function mostrarAgendamentos(telefone, cliente, acao) {
   await enviarMensagem(telefone, '🔍 Buscando agendamentos...');
   const agendamentos = await fisiosoft.listarAgendamentosCliente(cliente.Id);
   if (!agendamentos || agendamentos.length === 0) {
-    resetarSessao(telefone);
-    return enviarMensagem(telefone, `📭 Sem agendamentos futuros, *${cliente.Nome}*.\n\n*2* para agendar | *0* para voltar.`);
+    await enviarMensagem(telefone, `📭 Sem agendamentos futuros, *${cliente.Nome}*.\n\nQuando precisar, é só nos enviar um *Olá*. 😊`);
+    setSessao(telefone, { etapa: 'encerrado' });
+    return;
   }
   const lista = agendamentos.map((a, i) => {
     const dataHora = a.DataHoraInicio ? a.DataHoraInicio.split(' ') : ['', ''];
@@ -460,7 +459,11 @@ async function mostrarAgendamentos(telefone, cliente, acao) {
     const hora = dataHora[1] ? dataHora[1].substring(0, 5) : '';
     return `*${i+1}.* ${data} às ${hora} - ${a.Procedimento || 'Consulta'}`;
   }).join('\n');
-  if (acao === 'listar') { resetarSessao(telefone); return enviarMensagem(telefone, `📅 *Seus agendamentos:*\n\n${lista}\n\n*0* para voltar.`); }
+  if (acao === 'listar') {
+    await enviarMensagem(telefone, `📅 *Seus agendamentos:*\n\n${lista}\n\nQuando precisar, é só nos enviar um *Olá*. 😊`);
+    setSessao(telefone, { etapa: 'encerrado' });
+    return;
+  }
   const emoji = acao === 'cancelar' ? '❌' : '🔄';
   const textoAcao = acao === 'cancelar' ? 'cancelar' : 'reagendar';
   setSessao(telefone, { etapa: acao === 'cancelar' ? 'aguardando_cancelamento' : 'aguardando_reagendamento', agendamentos });
@@ -487,9 +490,12 @@ async function handleConfirmacaoCancel(telefone, texto, sessao) {
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para manter.');
   await enviarMensagem(telefone, '⏳ Cancelando...');
   const resultado = await fisiosoft.desmarcarAgendamento(sessao.agendamentoParaCancelar.IdAgendamento);
-  resetarSessao(telefone);
-  if (!resultado) return enviarMensagem(telefone, `❌ Erro ao cancelar.\n\n${CONTATO_HUMANO}`);
-  return enviarMensagem(telefone, `✅ Cancelado com sucesso!\n\n${MENU_PRINCIPAL}`);
+  if (!resultado) {
+    resetarSessao(telefone);
+    return enviarMensagem(telefone, `❌ Erro ao cancelar.\n\n${CONTATO_HUMANO}`);
+  }
+  await enviarMensagem(telefone, `✅ Cancelado com sucesso!\n\nQuando precisar, é só nos enviar um *Olá*. 😊`);
+  setSessao(telefone, { etapa: 'encerrado' });
 }
 
 async function handleReagendamento(telefone, texto, sessao) {
