@@ -7,7 +7,9 @@ const { listarFAQs, buscarResposta } = require('../utils/faq');
 const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, marcarAgendou, marcarRespondeuRemarketing } = require('../utils/clienteCache');
 
 const TELEFONE_CLINICA = 'tel:+551122683195';
-const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
+const WHATSAPP_RECEPCAO = 'https://wa.me/5511987281427';
+const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n💬 WhatsApp: wa.me/5511987281427\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
+const ENDERECO = `📍 *Clínica Lituânia*\nRua Lituânia, 209 - Mooca\nCEP 03184-020 - São Paulo/SP\n📞 (11) 2268-3195\n💬 WhatsApp: ${WHATSAPP_RECEPCAO}`;
 
 const MENU_PRINCIPAL = `👋 Olá! Bem-vindo(a) à *Clínica Lituânia*!
 
@@ -24,6 +26,7 @@ Como posso te ajudar hoje?
 
 Digite o número da opção desejada.`;
 
+const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const AGENDAS_POR_ESPECIALIDADE = {
@@ -108,12 +111,57 @@ async function buscarProximosHorarios(agendaId, procedimentoId, diasBusca = 7) {
   return horariosEncontrados;
 }
 
+// Extrai região do corpo da resposta da Lissa
+function extrairRegiao(texto) {
+  const match = texto.match(/\[REGIAO:([^\]]+)\]/i);
+  if (match) return match[1].toLowerCase().trim();
+  return null;
+}
+
+// Remove tag [REGIAO:...] do texto antes de enviar ao paciente
+function limparTextoIA(texto) {
+  return texto.replace(/\[REGIAO:[^\]]+\]/gi, '').trim();
+}
+
+// Gera orientação de roupa baseada na região
+function gerarOrientacaoRoupa(regiao) {
+  if (!regiao) return '👕 Vista roupa leve e adequada para o tratamento.';
+  const r = regiao.toLowerCase();
+  if (r.includes('joelho') || r.includes('quadril'))
+    return '👕 Para seu tratamento, venha de *bermuda ou shorts confortável* para facilitar o acesso à região.';
+  if (r.includes('ombro'))
+    return '👕 Para seu tratamento, venha com *regata ou blusa de alça* para facilitar a aplicação dos aparelhos.';
+  if (r.includes('coluna'))
+    return '👕 Para seu tratamento, venha com *roupa confortável* que permita movimentação.';
+  if (r.includes('cotovelo') || r.includes('punho') || r.includes('mão'))
+    return '👕 Para seu tratamento, venha com *manga curta ou camiseta* para facilitar o acesso ao membro superior.';
+  if (r.includes('tornozelo') || r.includes('pé'))
+    return '👕 Para seu tratamento, venha de *bermuda ou calça que arregace* para facilitar o acesso à região.';
+  return '👕 Vista roupa leve e adequada para o tratamento.';
+}
+
 async function processarMensagem(telefone, mensagem) {
   const texto = mensagem.trim();
+  const textoLower = texto.toLowerCase();
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
 
-  if (['menu', 'voltar', '0', 'sair'].includes(texto.toLowerCase())) {
+  // Encerrado — só reativa com palavras específicas
+  if (sessao.etapa === 'encerrado') {
+    const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p || textoLower.startsWith(p));
+    if (ativou) {
+      resetarSessao(telefone);
+      return enviarMensagem(telefone, MENU_PRINCIPAL);
+    }
+    return;
+  }
+
+  if (texto === '0' || textoLower === 'sair') {
+    setSessao(telefone, { etapa: 'encerrado' });
+    return enviarMensagem(telefone, `✅ Atendimento encerrado. Até logo! 😊\n\nQuando precisar, é só nos enviar um *Olá*.`);
+  }
+
+  if (textoLower === 'menu' || textoLower === 'voltar') {
     resetarSessao(telefone);
     return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
@@ -149,8 +197,8 @@ async function processarMensagem(telefone, mensagem) {
 async function handleMenu(telefone, texto) {
   switch (texto) {
     case '1':
-      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [] });
-      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a entender nossos serviços e encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
+      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
+      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
     case '2': case '3': case '4': case '5': {
       const acoes = { '2': 'agendar', '3': 'cancelar', '4': 'reagendar', '5': 'listar' };
       setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: acoes[texto] });
@@ -161,7 +209,7 @@ async function handleMenu(telefone, texto) {
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
     case '7':
       resetarSessao(telefone);
-      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\nClique no número abaixo para ligar:\n\n${TELEFONE_CLINICA}\n\nHorário: Segunda a Sexta, 7h às 20h 😊`);
+      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\n${ENDERECO}\n\nClique para falar via WhatsApp: ${WHATSAPP_RECEPCAO}`);
     default:
       return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
   }
@@ -173,13 +221,22 @@ async function handleLissa(telefone, texto, sessao) {
   await enviarMensagem(telefone, '...');
   const resposta = await consultarIA(historico);
   if (!resposta) return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
+
+  // Extrai região do corpo se mencionada
+  const regiao = extrairRegiao(resposta);
+  const respostaLimpa = limparTextoIA(resposta);
+
   historico.push({ role: 'assistant', content: resposta });
-  setSessao(telefone, { historicoLissa: historico });
+
+  const novaSessao = { historicoLissa: historico };
+  if (regiao) novaSessao.regiaoCorpo = regiao;
+  setSessao(telefone, novaSessao);
+
   if (historico.length >= 12) {
-    await enviarMensagem(telefone, resposta);
+    await enviarMensagem(telefone, respostaLimpa);
     return enviarMensagem(telefone, `💬 Para um atendimento mais personalizado:\n\n${CONTATO_HUMANO}\n\nOu *0* para voltar ao menu.`);
   }
-  return enviarMensagem(telefone, resposta);
+  return enviarMensagem(telefone, respostaLimpa);
 }
 
 async function handleTipoCliente(telefone, texto, sessao) {
@@ -325,39 +382,60 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
   await marcarAgendou(telefone);
 
-  // Mensagem 1 — Confirmação
+  const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
+  const regiao = sessao.regiaoCorpo || null;
+
+  // Mensagem 1 — Confirmação com endereço
   await enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
     `📅 ${sessao.horarioEscolhido.diaSemana} ${sessao.horarioEscolhido.data} às ${sessao.horarioEscolhido.hora}\n\n` +
-    `Até lá! 😊\n\n_Clínica Lituânia — (11) 2268-3195_`
+    `${ENDERECO}\n\n` +
+    `💬 Falar com a recepção: ${WHATSAPP_RECEPCAO}`
   );
 
-  // Mensagem 2 — Orientações gerais
-  const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
-  let roupaEspecifica = '👕 Vista roupa leve e adequada para o tratamento';
+  // Mensagem 2 — Orientações gerais + roupa específica por região
   if (nomeAgenda.includes('FISIOTERAPIA')) {
-    roupaEspecifica = '👕 Se for tratar joelho ou quadril, venha de bermuda/shorts confortável\n✅ Se for tratar ombro, venha de regata ou blusa de alça para aplicação dos aparelhos';
-  } else if (nomeAgenda.includes('PILATES')) {
-    roupaEspecifica = '👟 Vista roupa leve e traga sapatilha de meia';
-  } else if (nomeAgenda.includes('RPG')) {
-    roupaEspecifica = '👕 Vista roupa leve para ginástica';
-  }
-
-  await enviarMensagem(telefone,
-    `📋 *Orientações para sua consulta:*\n\n` +
-    `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
-    roupaEspecifica
-  );
-
-  // Mensagem 3 — Orientações específicas da Hidroterapia
-  if (nomeAgenda.includes('HIDROTERAPIA')) {
+    const orientacaoRoupa = gerarOrientacaoRoupa(regiao);
+    await enviarMensagem(telefone,
+      `📋 *Orientações para sua consulta:*\n\n` +
+      `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
+      `${orientacaoRoupa}`
+    );
+  } else if (nomeAgenda.includes('HIDROTERAPIA')) {
+    await enviarMensagem(telefone,
+      `📋 *Orientações para sua consulta:*\n\n` +
+      `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
+      `👕 Vista roupa leve para vir à clínica`
+    );
     await enviarMensagem(telefone,
       `🏊 *Orientações para Hidroterapia:*\n\n` +
       `✅ *Traje obrigatório:* Sunga ou maiô, touca, chinelo, roupão e toalha\n` +
       `❌ *Proibido adornos:* Brincos, correntes, pulseiras, anéis, etc\n` +
       `❌ *Proibido na piscina:* Cremes, óleos corporais e produtos de perfumaria\n` +
       `⚠️ *Atenção:* Ferimentos, uso de sondas ou alergias de pele impedem o uso da piscina`
+    );
+  } else if (nomeAgenda.includes('PILATES')) {
+    await enviarMensagem(telefone,
+      `📋 *Orientações para o Pilates:*\n\n` +
+      `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
+      `👟 Vista *roupa leve* e traga *sapatilha de meia*\n` +
+      `👥 Turmas com no máximo *3 alunos*\n` +
+      `⏱️ Aulas de *1 hora* ministradas por fisioterapeutas experientes`
+    );
+  } else if (nomeAgenda.includes('RPG')) {
+    await enviarMensagem(telefone,
+      `📋 *Orientações para o RPG:*\n\n` +
+      `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
+      `👕 Vista *roupa leve para ginástica*\n` +
+      `🔄 Temos vestiários disponíveis caso queira se trocar na clínica\n` +
+      `⏱️ Sessão individual de *1 hora*, realizada *1x por semana*`
+    );
+  } else {
+    await enviarMensagem(telefone,
+      `📋 *Orientações para sua consulta:*\n\n` +
+      `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
+      `👕 Vista roupa leve e adequada para o tratamento`
     );
   }
 }
