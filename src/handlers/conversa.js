@@ -112,14 +112,14 @@ async function buscarProximosHorarios(agendaId, procedimentoId, diasBusca = 7) {
 }
 
 function extrairRegiao(texto) {
-  const match = texto.match(/\[REGIAO:([^\]]+)\]/i);
+  const match = texto.match(/\[REGIAO\s*:\s*([^\]]+)\]/i);
   if (match) return match[1].toLowerCase().trim();
   return null;
 }
 
 function limparTextoIA(texto) {
   return texto
-    .replace(/\[REGIAO:[^\]]+\]/gi, '')
+    .replace(/\[REGIAO\s*:\s*[^\]]+\]/gi, '')
     .replace(/\[OFERECER_AGENDAMENTO\]/gi, '')
     .trim();
 }
@@ -161,7 +161,7 @@ async function processarMensagem(telefone, mensagem) {
   }
 
   if (textoLower === 'menu' || textoLower === 'voltar') {
-    resetarSessao(telefone);
+    setSessao(telefone, { etapa: 'menu' });
     return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
 
@@ -184,7 +184,7 @@ async function processarMensagem(telefone, mensagem) {
     case 'aguardando_reagendamento':            return handleReagendamento(telefone, texto, sessao);
     case 'aguardando_faq':                      return handleFAQ(telefone, texto);
     default:
-      resetarSessao(telefone);
+      setSessao(telefone, { etapa: 'menu' });
       return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
 }
@@ -264,7 +264,6 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     );
   }
 
-  // Resposta ambígua — volta para a Lissa conversar
   setSessao(telefone, { etapa: 'conversando_com_lissa' });
   return handleLissa(telefone, texto, sessao);
 }
@@ -336,7 +335,7 @@ async function handleEmailNovo(telefone, texto, sessao) {
     Celular: sessao.celularNovo, Email: email, Sexo: 'F',
   });
   if (!novoCliente) {
-    resetarSessao(telefone);
+    setSessao(telefone, { etapa: 'menu' });
     return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
   }
   const cliente = { Id: novoCliente, Nome: sessao.nomeNovo };
@@ -357,7 +356,7 @@ async function iniciarFluxoAgendamento(telefone, cliente) {
 
 async function handleEspecialidade(telefone, texto, sessao) {
   if (texto === '0') {
-    resetarSessao(telefone);
+    setSessao(telefone, { etapa: 'menu' });
     return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
   const especialidade = AGENDAS_POR_ESPECIALIDADE[texto];
@@ -372,6 +371,10 @@ async function handleEspecialidade(telefone, texto, sessao) {
 }
 
 async function handlePeriodo(telefone, texto, sessao) {
+  if (texto === '0') {
+    setSessao(telefone, { etapa: 'menu' });
+    return enviarMensagem(telefone, MENU_PRINCIPAL);
+  }
   const index = parseInt(texto) - 1;
   const periodos = sessao.especialidade.periodos;
   if (isNaN(index) || index < 0 || index >= periodos.length)
@@ -390,6 +393,10 @@ async function buscarEMostrarHorarios(telefone, cliente, agenda, dias) {
 }
 
 async function handleHorario(telefone, texto, sessao) {
+  if (texto === '0') {
+    setSessao(telefone, { etapa: 'menu' });
+    return enviarMensagem(telefone, MENU_PRINCIPAL);
+  }
   const index = parseInt(texto) - 1;
   if (isNaN(index) || index < 0 || index >= sessao.horariosDisponiveis.length)
     return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horariosDisponiveis.length}.`);
@@ -403,7 +410,10 @@ async function handleHorario(telefone, texto, sessao) {
 }
 
 async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
-  if (texto === '2') { resetarSessao(telefone); return enviarMensagem(telefone, `Cancelado.\n\n${MENU_PRINCIPAL}`); }
+  if (texto === '2') {
+    setSessao(telefone, { etapa: 'menu' });
+    return enviarMensagem(telefone, `Cancelado.\n\n${MENU_PRINCIPAL}`);
+  }
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para cancelar.');
   await enviarMensagem(telefone, '⏳ Realizando agendamento...');
   const resultado = await fisiosoft.incluirAgendamento({
@@ -516,12 +526,15 @@ async function handleCancelamento(telefone, texto, sessao) {
 }
 
 async function handleConfirmacaoCancel(telefone, texto, sessao) {
-  if (texto === '2') { resetarSessao(telefone); return enviarMensagem(telefone, `Mantido!\n\n${MENU_PRINCIPAL}`); }
+  if (texto === '2') {
+    setSessao(telefone, { etapa: 'menu' });
+    return enviarMensagem(telefone, `Mantido!\n\n${MENU_PRINCIPAL}`);
+  }
   if (texto !== '1') return enviarMensagem(telefone, 'Digite *1* para confirmar ou *2* para manter.');
   await enviarMensagem(telefone, '⏳ Cancelando...');
   const resultado = await fisiosoft.desmarcarAgendamento(sessao.agendamentoParaCancelar.IdAgendamento);
   if (!resultado) {
-    resetarSessao(telefone);
+    setSessao(telefone, { etapa: 'menu' });
     return enviarMensagem(telefone, `❌ Erro ao cancelar.\n\n${CONTATO_HUMANO}`);
   }
   await enviarMensagem(telefone, `✅ Cancelado com sucesso!\n\nQuando precisar, é só nos enviar um *Olá*. 😊`);
