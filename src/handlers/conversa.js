@@ -378,8 +378,9 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     IdProfissional: sessao.agendaSelecionada.idProfissional,
     Data: sessao.horarioEscolhido.data, Hora: sessao.horarioEscolhido.hora,
   });
-  resetarSessao(telefone);
+ resetarSessao(telefone);
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
+  if (resultado.erro) return enviarMensagem(telefone, `⚠️ *${resultado.erro}*\n\nPor favor escolha outro horário ou entre em contato:\n\n${CONTATO_HUMANO}`);
   await marcarAgendou(telefone);
 
   const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
