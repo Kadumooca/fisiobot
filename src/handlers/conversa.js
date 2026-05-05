@@ -6,7 +6,6 @@ const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
 const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, marcarAgendou, marcarRespondeuRemarketing } = require('../utils/clienteCache');
 
-const TELEFONE_CLINICA = 'tel:+551122683195';
 const WHATSAPP_RECEPCAO = 'https://wa.me/5511987281427';
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n💬 WhatsApp: wa.me/5511987281427\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
 const ENDERECO = `📍 *Clínica Lituânia*\nRua Lituânia, 209 - Mooca\nCEP 03184-020 - São Paulo/SP\n📞 (11) 2268-3195\n💬 WhatsApp: ${WHATSAPP_RECEPCAO}`;
@@ -21,7 +20,6 @@ Como posso te ajudar hoje?
 *4.* 🔄 Reagendar consulta
 *5.* 🗓️ Ver meus agendamentos
 *6.* ❓ Dúvidas frequentes
-*7.* 📞 Falar com a equipe
 *0.* 🔚 Encerrar atendimento
 
 Digite o número da opção desejada.`;
@@ -213,9 +211,6 @@ async function handleMenu(telefone, texto) {
     case '6':
       setSessao(telefone, { etapa: 'aguardando_faq' });
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
-    case '7':
-      setSessao(telefone, { etapa: 'encerrado' });
-      return enviarMensagem(telefone, `📞 *Falar com a equipe*\n\n${ENDERECO}\n\nClique para falar via WhatsApp: ${WHATSAPP_RECEPCAO}\n\nQuando precisar novamente, é só enviar um *Olá*. 😊`);
     default:
       return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
   }
