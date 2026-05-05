@@ -239,11 +239,28 @@ async function handleLissa(telefone, texto, sessao) {
 }
 
 async function handleRespostaAgendamento(telefone, texto, sessao) {
-  const textoLower = texto.toLowerCase();
-  const respostaSim = ['sim', 's', 'sim!', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos', 'pode ser', 'topo', 'quero sim', 'com certeza'];
-  const respostaNao = ['não', 'nao', 'n', 'agora não', 'agora nao', 'depois', 'talvez', 'ainda não', 'ainda nao'];
+  const textoLower = texto.toLowerCase().trim();
 
-  if (respostaSim.some(p => textoLower === p || textoLower.includes(p))) {
+  const respostaSim = [
+    'sim', 's', 'sim!', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos',
+    'pode ser', 'topo', 'quero sim', 'com certeza', 'tenho', 'já fui',
+    'ja fui', 'já consultei', 'ja consultei', 'tenho sim', 'já tenho',
+    'ja tenho', 'fui sim', 'consultei', 'tenho encaminhamento'
+  ];
+
+  const respostaNao = [
+    'não', 'nao', 'n', 'agora não', 'agora nao', 'depois', 'talvez',
+    'ainda não', 'ainda nao', 'não tenho', 'nao tenho', 'ainda não fui',
+    'ainda nao fui', 'não fui', 'nao fui', 'não consultei', 'nao consultei',
+    'ainda não consultei', 'ainda nao consultei', 'não tenho encaminhamento',
+    'nao tenho encaminhamento', 'sem encaminhamento', 'não tenho médico',
+    'nao tenho medico'
+  ];
+
+  const temSim = respostaSim.some(p => textoLower === p || textoLower.includes(p));
+  const temNao = respostaNao.some(p => textoLower === p || textoLower.includes(p));
+
+  if (temSim && !temNao) {
     const clienteSalvo = await buscarClientePorTelefone(telefone);
     if (clienteSalvo) {
       setSessao(telefone, { cliente: clienteSalvo, regiaoCorpo: sessao.regiaoCorpo });
@@ -255,15 +272,18 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     }
   }
 
-  if (respostaNao.some(p => textoLower === p || textoLower.includes(p))) {
-    setSessao(telefone, { etapa: 'conversando_com_lissa' });
-    return enviarMensagem(telefone,
-      `Entendo, sem pressão! 😊\n\n` +
-      `Quando estiver pronto, é só me falar que verifico os melhores horários para você.\n\n` +
-      `Posso te ajudar com mais alguma dúvida?`
+  if (temNao && !temSim) {
+    await enviarMensagem(telefone,
+      `Tudo bem, não se preocupe! 😊\n\n` +
+      `O encaminhamento médico não é obrigatório para iniciar o tratamento. ` +
+      `Nossos profissionais farão uma avaliação completa na primeira sessão.\n\n` +
+      `Posso verificar os horários disponíveis para você?`
     );
+    setSessao(telefone, { etapa: 'aguardando_resposta_agendamento' });
+    return;
   }
 
+  // Resposta ambígua — volta para a Lissa conversar
   setSessao(telefone, { etapa: 'conversando_com_lissa' });
   return handleLissa(telefone, texto, sessao);
 }
