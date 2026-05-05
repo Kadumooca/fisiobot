@@ -118,7 +118,10 @@ function extrairRegiao(texto) {
 }
 
 function limparTextoIA(texto) {
-  return texto.replace(/\[REGIAO:[^\]]+\]/gi, '').trim();
+  return texto
+    .replace(/\[REGIAO:[^\]]+\]/gi, '')
+    .replace(/\[OFERECER_AGENDAMENTO\]/gi, '')
+    .trim();
 }
 
 function gerarOrientacaoRoupa(regiao) {
@@ -143,7 +146,6 @@ async function processarMensagem(telefone, mensagem) {
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
 
-  // Encerrado — só reativa com palavra exata
   if (sessao.etapa === 'encerrado') {
     const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
     if (ativou) {
@@ -164,22 +166,23 @@ async function processarMensagem(telefone, mensagem) {
   }
 
   switch (sessao.etapa) {
-    case 'menu':                               return handleMenu(telefone, texto);
-    case 'conversando_com_lissa':              return handleLissa(telefone, texto, sessao);
-    case 'aguardando_tipo_cliente':            return handleTipoCliente(telefone, texto, sessao);
-    case 'aguardando_cpf':                     return handleCPF(telefone, texto, sessao);
-    case 'aguardando_cpf_novo':                return handleCPFNovo(telefone, texto, sessao);
-    case 'aguardando_nome_novo':               return handleNomeNovo(telefone, texto, sessao);
-    case 'aguardando_celular_novo':            return handleCelularNovo(telefone, texto, sessao);
-    case 'aguardando_email_novo':              return handleEmailNovo(telefone, texto, sessao);
-    case 'aguardando_especialidade':           return handleEspecialidade(telefone, texto, sessao);
-    case 'aguardando_periodo':                 return handlePeriodo(telefone, texto, sessao);
-    case 'aguardando_horario':                 return handleHorario(telefone, texto, sessao);
-    case 'aguardando_confirmacao_agendamento': return handleConfirmacaoAgendamento(telefone, texto, sessao);
-    case 'aguardando_cancelamento':            return handleCancelamento(telefone, texto, sessao);
-    case 'aguardando_confirmacao_cancel':      return handleConfirmacaoCancel(telefone, texto, sessao);
-    case 'aguardando_reagendamento':           return handleReagendamento(telefone, texto, sessao);
-    case 'aguardando_faq':                     return handleFAQ(telefone, texto);
+    case 'menu':                                return handleMenu(telefone, texto);
+    case 'conversando_com_lissa':               return handleLissa(telefone, texto, sessao);
+    case 'aguardando_resposta_agendamento':     return handleRespostaAgendamento(telefone, texto, sessao);
+    case 'aguardando_tipo_cliente':             return handleTipoCliente(telefone, texto, sessao);
+    case 'aguardando_cpf':                      return handleCPF(telefone, texto, sessao);
+    case 'aguardando_cpf_novo':                 return handleCPFNovo(telefone, texto, sessao);
+    case 'aguardando_nome_novo':                return handleNomeNovo(telefone, texto, sessao);
+    case 'aguardando_celular_novo':             return handleCelularNovo(telefone, texto, sessao);
+    case 'aguardando_email_novo':               return handleEmailNovo(telefone, texto, sessao);
+    case 'aguardando_especialidade':            return handleEspecialidade(telefone, texto, sessao);
+    case 'aguardando_periodo':                  return handlePeriodo(telefone, texto, sessao);
+    case 'aguardando_horario':                  return handleHorario(telefone, texto, sessao);
+    case 'aguardando_confirmacao_agendamento':  return handleConfirmacaoAgendamento(telefone, texto, sessao);
+    case 'aguardando_cancelamento':             return handleCancelamento(telefone, texto, sessao);
+    case 'aguardando_confirmacao_cancel':       return handleConfirmacaoCancel(telefone, texto, sessao);
+    case 'aguardando_reagendamento':            return handleReagendamento(telefone, texto, sessao);
+    case 'aguardando_faq':                      return handleFAQ(telefone, texto);
     default:
       resetarSessao(telefone);
       return enviarMensagem(telefone, MENU_PRINCIPAL);
@@ -215,32 +218,55 @@ async function handleLissa(telefone, texto, sessao) {
   if (!resposta) return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
 
   const regiao = extrairRegiao(resposta);
+  const ofereceAgendamento = resposta.includes('[OFERECER_AGENDAMENTO]');
   const respostaLimpa = limparTextoIA(resposta);
-  historico.push({ role: 'assistant', content: resposta });
 
+  historico.push({ role: 'assistant', content: resposta });
   const novaSessao = { historicoLissa: historico };
   if (regiao) novaSessao.regiaoCorpo = regiao;
   setSessao(telefone, novaSessao);
 
-  if (respostaLimpa.toUpperCase().includes('AGENDAR')) {
-    const respostaSemAgendar = respostaLimpa.replace(/Digite \*AGENDAR\*\s*😊?/gi, '').trim();
-    if (respostaSemAgendar) await enviarMensagem(telefone, respostaSemAgendar);
+  await enviarMensagem(telefone, respostaLimpa);
+
+  if (ofereceAgendamento) {
+    setSessao(telefone, { etapa: 'aguardando_resposta_agendamento' });
+    return;
+  }
+
+  if (historico.length >= 12) {
+    return enviarMensagem(telefone, `💬 Para um atendimento mais personalizado:\n\n${CONTATO_HUMANO}\n\nOu *0* para voltar ao menu.`);
+  }
+}
+
+async function handleRespostaAgendamento(telefone, texto, sessao) {
+  const textoLower = texto.toLowerCase();
+  const respostaSim = ['sim', 's', 'sim!', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos', 'pode ser', 'topo', 'quero sim', 'com certeza'];
+  const respostaNao = ['não', 'nao', 'n', 'agora não', 'agora nao', 'depois', 'talvez', 'ainda não', 'ainda nao'];
+
+  if (respostaSim.some(p => textoLower === p || textoLower.includes(p))) {
     const clienteSalvo = await buscarClientePorTelefone(telefone);
     if (clienteSalvo) {
-      setSessao(telefone, { cliente: clienteSalvo, regiaoCorpo: regiao });
+      setSessao(telefone, { cliente: clienteSalvo, regiaoCorpo: sessao.regiaoCorpo });
       await enviarMensagem(telefone, `Ótimo! Vamos agendar para *${clienteSalvo.Nome}*! 😊`);
       return iniciarFluxoAgendamento(telefone, clienteSalvo);
     } else {
-      setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: regiao });
+      setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: sessao.regiaoCorpo });
       return enviarMensagem(telefone, `Ótimo! Vamos agendar! 😊\n\nVocê já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente`);
     }
   }
 
-  if (historico.length >= 12) {
-    await enviarMensagem(telefone, respostaLimpa);
-    return enviarMensagem(telefone, `💬 Para um atendimento mais personalizado:\n\n${CONTATO_HUMANO}\n\nOu *0* para voltar ao menu.`);
+  if (respostaNao.some(p => textoLower === p || textoLower.includes(p))) {
+    setSessao(telefone, { etapa: 'conversando_com_lissa' });
+    return enviarMensagem(telefone,
+      `Entendo, sem pressão! 😊\n\n` +
+      `Quando estiver pronto, é só me falar que verifico os melhores horários para você.\n\n` +
+      `Posso te ajudar com mais alguma dúvida?`
+    );
   }
-  return enviarMensagem(telefone, respostaLimpa);
+
+  // Resposta ambígua — volta para a Lissa conversar
+  setSessao(telefone, { etapa: 'conversando_com_lissa' });
+  return handleLissa(telefone, texto, sessao);
 }
 
 async function handleTipoCliente(telefone, texto, sessao) {
