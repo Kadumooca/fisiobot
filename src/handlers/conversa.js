@@ -442,6 +442,9 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
       `👕 Vista roupa leve e adequada para o tratamento`
     );
   }
+
+  // Encerra sessão — só reativa com palavra de ativação
+  setSessao(telefone, { etapa: 'encerrado' });
 }
 
 async function mostrarAgendamentos(telefone, cliente, acao) {
