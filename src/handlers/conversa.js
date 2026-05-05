@@ -147,13 +147,18 @@ async function processarMensagem(telefone, mensagem) {
   await marcarRespondeuRemarketing(telefone);
 
   // Encerrado — só reativa com palavras específicas
-  if (sessao.etapa === 'encerrado') {
-    const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p || textoLower.startsWith(p));
-    if (ativou) {
-      resetarSessao(telefone);
-      return enviarMensagem(telefone, MENU_PRINCIPAL);
+ if (sessao.etapa === 'encerrado' || sessao.etapa === 'menu') {
+    const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p || textoLower.startsWith(p + ' '));
+    if (!ativou && (sessao.etapa === 'encerrado' || !['1','2','3','4','5','6','7','0'].includes(texto))) {
+      if (sessao.etapa === 'encerrado') return;
     }
-    return;
+    if (sessao.etapa === 'encerrado') {
+      if (ativou) {
+        resetarSessao(telefone);
+        return enviarMensagem(telefone, MENU_PRINCIPAL);
+      }
+      return;
+    }
   }
 
   if (texto === '0' || textoLower === 'sair') {
