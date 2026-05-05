@@ -356,6 +356,10 @@ async function iniciarFluxoAgendamento(telefone, cliente) {
 }
 
 async function handleEspecialidade(telefone, texto, sessao) {
+  if (texto === '0') {
+    resetarSessao(telefone);
+    return enviarMensagem(telefone, MENU_PRINCIPAL);
+  }
   const especialidade = AGENDAS_POR_ESPECIALIDADE[texto];
   if (!especialidade) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
   await registrarLead(telefone, sessao.cliente?.Nome, especialidade.nome);
