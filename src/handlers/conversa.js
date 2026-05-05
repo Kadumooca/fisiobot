@@ -153,7 +153,6 @@ async function processarMensagem(telefone, mensagem) {
     return;
   }
 
-  // Voltar ao anterior com 0
   if (texto === '0') {
     return voltarAnterior(telefone, sessao);
   }
@@ -194,33 +193,18 @@ async function processarMensagem(telefone, mensagem) {
 
 async function voltarAnterior(telefone, sessao) {
   switch (sessao.etapa) {
+    case 'menu':
+      setSessao(telefone, { etapa: 'encerrado' });
+      return enviarMensagem(telefone, `✅ Atendimento encerrado. Até logo! 😊\n\nQuando precisar, é só nos enviar um *Olá*.`);
     case 'aguardando_horario':
-      // Volta para período se tinha período, senão para especialidades
       if (sessao.especialidade && sessao.especialidade.periodos.length > 1) {
         const lista = sessao.especialidade.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
         setSessao(telefone, { etapa: 'aguardando_periodo' });
         return enviarMensagem(telefone, `✅ *${sessao.especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número ou *0* para voltar.`);
       }
-      // Sem período — volta para especialidades
       return voltarParaEspecialidades(telefone, sessao);
-
     case 'aguardando_periodo':
       return voltarParaEspecialidades(telefone, sessao);
-
-    case 'aguardando_especialidade':
-    case 'aguardando_faq':
-    case 'conversando_com_lissa':
-    case 'aguardando_resposta_agendamento':
-    case 'aguardando_tipo_cliente':
-    case 'aguardando_cpf':
-    case 'aguardando_cpf_novo':
-    case 'aguardando_nome_novo':
-    case 'aguardando_celular_novo':
-    case 'aguardando_email_novo':
-    case 'aguardando_cancelamento':
-    case 'aguardando_reagendamento':
-    case 'aguardando_confirmacao_agendamento':
-    case 'aguardando_confirmacao_cancel':
     default:
       setSessao(telefone, { etapa: 'menu' });
       return enviarMensagem(telefone, MENU_PRINCIPAL);
