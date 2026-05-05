@@ -136,7 +136,7 @@ function gerarOrientacaoRoupa(regiao) {
   if (r.includes('cotovelo') || r.includes('punho') || r.includes('mão'))
     return '👕 Para seu tratamento, venha com *manga curta ou camiseta* para facilitar o acesso ao membro superior.';
   if (r.includes('tornozelo') || r.includes('pé'))
-    return '👕 Para seu tratamento, venha de *bermuda ou calça que arregace* para facilitar o acesso à região.';
+    return '👕 Para seu tratamento, venha de *bermuda ou calça que possa ser levantada* para facilitar o acesso à região.';
   return '👕 Vista roupa leve e adequada para o tratamento.';
 }
 
@@ -391,8 +391,8 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
     `📅 ${sessao.horarioEscolhido.diaSemana} ${sessao.horarioEscolhido.data} às ${sessao.horarioEscolhido.hora}\n\n` +
-    `${ENDERECO}\n\n` +
-    `💬 Falar com a recepção: ${WHATSAPP_RECEPCAO}`
+    `📍 *Clínica Lituânia*\nRua Lituânia, 209 - Mooca\nCEP 03184-020 - São Paulo/SP\n\n` +
+    `Até lá! 😊`
   );
 
   // Mensagem 2 — Orientações gerais + roupa específica por região
