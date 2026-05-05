@@ -111,19 +111,16 @@ async function buscarProximosHorarios(agendaId, procedimentoId, diasBusca = 7) {
   return horariosEncontrados;
 }
 
-// Extrai região do corpo da resposta da Lissa
 function extrairRegiao(texto) {
   const match = texto.match(/\[REGIAO:([^\]]+)\]/i);
   if (match) return match[1].toLowerCase().trim();
   return null;
 }
 
-// Remove tag [REGIAO:...] do texto antes de enviar ao paciente
 function limparTextoIA(texto) {
   return texto.replace(/\[REGIAO:[^\]]+\]/gi, '').trim();
 }
 
-// Gera orientação de roupa baseada na região
 function gerarOrientacaoRoupa(regiao) {
   if (!regiao) return '👕 Vista roupa leve e adequada para o tratamento.';
   const r = regiao.toLowerCase();
@@ -146,19 +143,13 @@ async function processarMensagem(telefone, mensagem) {
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
 
-  // Encerrado — só reativa com palavras específicas
- if (sessao.etapa === 'encerrado' || sessao.etapa === 'menu') {
+  if (sessao.etapa === 'encerrado') {
     const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p || textoLower.startsWith(p + ' '));
-    if (!ativou && (sessao.etapa === 'encerrado' || !['1','2','3','4','5','6','7','0'].includes(texto))) {
-      if (sessao.etapa === 'encerrado') return;
+    if (ativou) {
+      resetarSessao(telefone);
+      return enviarMensagem(telefone, MENU_PRINCIPAL);
     }
-    if (sessao.etapa === 'encerrado') {
-      if (ativou) {
-        resetarSessao(telefone);
-        return enviarMensagem(telefone, MENU_PRINCIPAL);
-      }
-      return;
-    }
+    return;
   }
 
   if (texto === '0' || textoLower === 'sair') {
@@ -169,11 +160,6 @@ async function processarMensagem(telefone, mensagem) {
   if (textoLower === 'menu' || textoLower === 'voltar') {
     resetarSessao(telefone);
     return enviarMensagem(telefone, MENU_PRINCIPAL);
-  }
-
-  if (texto.toUpperCase() === 'AGENDAR' && sessao.etapa === 'conversando_com_lissa') {
-    setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar' });
-    return enviarMensagem(telefone, `Ótimo! Vamos agendar! 😊\n\nVocê já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente`);
   }
 
   switch (sessao.etapa) {
@@ -227,15 +213,27 @@ async function handleLissa(telefone, texto, sessao) {
   const resposta = await consultarIA(historico);
   if (!resposta) return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅\n\n${CONTATO_HUMANO}\n\n*0* para voltar ao menu.`);
 
-  // Extrai região do corpo se mencionada
   const regiao = extrairRegiao(resposta);
   const respostaLimpa = limparTextoIA(resposta);
-
   historico.push({ role: 'assistant', content: resposta });
 
   const novaSessao = { historicoLissa: historico };
   if (regiao) novaSessao.regiaoCorpo = regiao;
   setSessao(telefone, novaSessao);
+
+  if (respostaLimpa.toUpperCase().includes('AGENDAR')) {
+    const respostaSemAgendar = respostaLimpa.replace(/Digite \*AGENDAR\*\s*😊?/gi, '').trim();
+    if (respostaSemAgendar) await enviarMensagem(telefone, respostaSemAgendar);
+    const clienteSalvo = await buscarClientePorTelefone(telefone);
+    if (clienteSalvo) {
+      setSessao(telefone, { cliente: clienteSalvo, regiaoCorpo: regiao });
+      await enviarMensagem(telefone, `Ótimo! Vamos agendar para *${clienteSalvo.Nome}*! 😊`);
+      return iniciarFluxoAgendamento(telefone, clienteSalvo);
+    } else {
+      setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: regiao });
+      return enviarMensagem(telefone, `Ótimo! Vamos agendar! 😊\n\nVocê já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente`);
+    }
+  }
 
   if (historico.length >= 12) {
     await enviarMensagem(telefone, respostaLimpa);
@@ -383,7 +381,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     IdProfissional: sessao.agendaSelecionada.idProfissional,
     Data: sessao.horarioEscolhido.data, Hora: sessao.horarioEscolhido.hora,
   });
- resetarSessao(telefone);
+  resetarSessao(telefone);
   if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
   if (resultado.erro) return enviarMensagem(telefone, `⚠️ *${resultado.erro}*\n\nPor favor escolha outro horário ou entre em contato:\n\n${CONTATO_HUMANO}`);
   await marcarAgendou(telefone);
@@ -391,7 +389,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
   const regiao = sessao.regiaoCorpo || null;
 
-  // Mensagem 1 — Confirmação com endereço
+  // Mensagem 1 — Confirmação
   await enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
@@ -400,13 +398,13 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     `Até lá! 😊`
   );
 
-  // Mensagem 2 — Orientações gerais + roupa específica por região
+  // Mensagem 2 — Orientações específicas por especialidade
   if (nomeAgenda.includes('FISIOTERAPIA')) {
     const orientacaoRoupa = gerarOrientacaoRoupa(regiao);
     await enviarMensagem(telefone,
       `📋 *Orientações para sua consulta:*\n\n` +
       `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
-      `${orientacaoRoupa}`
+      orientacaoRoupa
     );
   } else if (nomeAgenda.includes('HIDROTERAPIA')) {
     await enviarMensagem(telefone,
