@@ -275,7 +275,8 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     'sim', 's', 'sim!', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos',
     'pode ser', 'topo', 'quero sim', 'com certeza', 'tenho', 'já fui',
     'ja fui', 'já consultei', 'ja consultei', 'tenho sim', 'já tenho',
-    'ja tenho', 'fui sim', 'consultei', 'tenho encaminhamento'
+    'ja tenho', 'fui sim', 'consultei', 'tenho encaminhamento',
+    'podemos continuar', 'pode continuar', 'continuar', 'continua'
   ];
 
   const respostaNao = [
@@ -467,6 +468,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
   const regiao = sessao.regiaoCorpo || null;
 
+  // Mensagem 1 — Confirmação
   await enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
@@ -475,6 +477,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     `Até lá! 😊`
   );
 
+  // Mensagem 2 — Orientações específicas por especialidade
   if (nomeAgenda.includes('FISIOTERAPIA')) {
     const orientacaoRoupa = gerarOrientacaoRoupa(regiao);
     await enviarMensagem(telefone,
@@ -518,6 +521,13 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
       `👕 Vista roupa leve e adequada para o tratamento`
     );
   }
+
+  // Mensagem 3 — Informação sobre próximas sessões
+  await enviarMensagem(telefone,
+    `📌 *Informação importante:*\n\n` +
+    `O horário agendado é válido para esta sessão. Para dar continuidade ao seu tratamento, as próximas sessões deverão ser agendadas diretamente na recepção da clínica — nossa equipe terá prazer em encontrar os melhores horários para a sua rotina! 😊\n\n` +
+    `📞 (11) 2268-3195 | 💬 WhatsApp: (11) 98728-1427`
+  );
 
   setSessao(telefone, { etapa: 'encerrado' });
 }
