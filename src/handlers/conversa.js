@@ -235,8 +235,10 @@ async function handleMenu(telefone, texto) {
     case '6':
       setSessao(telefone, { etapa: 'aguardando_faq' });
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
-    default:
-      return enviarMensagem(telefone, `Opção inválida.\n\n${MENU_PRINCIPAL}`);
+   default:
+      // Qualquer coisa fora do menu encerra silenciosamente
+      setSessao(telefone, { etapa: 'encerrado' });
+      return;
   }
 }
 
