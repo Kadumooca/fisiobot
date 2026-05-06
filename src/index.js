@@ -9,6 +9,8 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+const MSG_APENAS_TEXTO = `😊 Olá! Sou um assistente virtual e trabalho apenas com mensagens de texto. Áudios, fotos e vídeos não consigo processar ainda. Escreva o que precisa e terei prazer em te ajudar!`;
+
 // Mapa de timeouts por telefone
 const timeouts = new Map();
 
@@ -23,13 +25,9 @@ function limparTimeouts(telefone) {
 
 function agendarTimeouts(telefone) {
   limparTimeouts(telefone);
-
   const sessao = getSessao(telefone);
-
-  // Não agenda timeout se sessão está encerrada ou no menu inicial
   if (sessao.etapa === 'encerrado' || sessao.etapa === 'menu') return;
 
-  // Timeout 1 — 3 minutos: manda "alô"
   const t1 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
@@ -37,7 +35,6 @@ function agendarTimeouts(telefone) {
     setSessao(telefone, { aguardandoResposta: true });
   }, 3 * 60 * 1000);
 
-  // Timeout 2 — 5 minutos: pergunta se encerra
   const t2 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
@@ -53,23 +50,61 @@ function agendarTimeouts(telefone) {
   timeouts.set(telefone, { t1, t2 });
 }
 
+function detectarMidiaOuPerguntaSobreAudio(body, mensagem) {
+  // Detecta mídia enviada diretamente
+  const msg = body.data?.message;
+  if (
+    msg?.audioMessage ||
+    msg?.videoMessage ||
+    msg?.imageMessage ||
+    msg?.documentMessage ||
+    msg?.stickerMessage ||
+    msg?.voiceMessage ||
+    msg?.pttMessage
+  ) return true;
+
+  // Detecta perguntas sobre envio de mídia no texto
+  if (mensagem) {
+    const textoLower = mensagem.toLowerCase();
+    const palavrasAudio = [
+      'posso mandar audio', 'posso enviar audio', 'aceita audio',
+      'posso mandar áudio', 'posso enviar áudio', 'aceita áudio',
+      'posso mandar voz', 'posso enviar voz', 'aceita voz',
+      'posso mandar foto', 'posso enviar foto', 'aceita foto',
+      'posso mandar video', 'posso enviar video', 'aceita video',
+      'posso mandar vídeo', 'posso enviar vídeo', 'aceita vídeo',
+      'posso gravar', 'mensagem de voz', 'por voz', 'gravação de voz',
+      'aceita imagem', 'posso mandar imagem', 'posso enviar imagem',
+      'manda foto', 'manda audio', 'manda áudio', 'manda vídeo', 'manda video'
+    ];
+    if (palavrasAudio.some(p => textoLower.includes(p))) return true;
+  }
+
+  return false;
+}
+
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
     if (body.data?.key?.fromMe) return res.sendStatus(200);
-    const mensagem = body.data?.message?.conversation || body.data?.message?.extendedTextMessage?.text;
-    if (!mensagem) return res.sendStatus(200);
+
     const telefone = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
+
+    const mensagem = body.data?.message?.conversation ||
+                     body.data?.message?.extendedTextMessage?.text;
+
+    // Detecta mídia ou pergunta sobre mídia
+    if (detectarMidiaOuPerguntaSobreAudio(body, mensagem)) {
+      await enviarMensagem(telefone, MSG_APENAS_TEXTO);
+      return res.sendStatus(200);
+    }
+
+    if (!mensagem) return res.sendStatus(200);
+
     console.log(`Mensagem de ${telefone}: ${mensagem}`);
-
-    // Cancela timeouts anteriores ao receber nova mensagem
     limparTimeouts(telefone);
-
-    // Processa mensagem
     await processarMensagem(telefone, mensagem);
-
-    // Agenda novos timeouts após processar
     agendarTimeouts(telefone);
 
     return res.sendStatus(200);
@@ -81,7 +116,6 @@ app.post('/webhook', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// Job de remarketing — verifica a cada 30 minutos
 setInterval(async () => {
   try {
     await executarRemarketing();
@@ -90,7 +124,6 @@ setInterval(async () => {
   }
 }, 30 * 60 * 1000);
 
-// Executa uma vez ao iniciar (se estiver no horário)
 executarRemarketing().catch(console.error);
 
 const PORT = process.env.PORT || 3000;
