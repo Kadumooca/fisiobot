@@ -143,6 +143,14 @@ function gerarOrientacaoRoupa(regiao) {
   return '👕 Vista roupa leve e adequada para o tratamento.';
 }
 
+function contextoPilatesAtivo(sessao) {
+  const historico = sessao.historicoLissa || [];
+  for (let i = historico.length - 1; i >= 0; i--) {
+    if (historico[i]?.content?.toLowerCase().includes('pilates')) return true;
+  }
+  return false;
+}
+
 async function processarMensagem(telefone, mensagem) {
   const texto = mensagem.trim();
   const textoLower = texto.toLowerCase();
@@ -285,6 +293,12 @@ async function handleLissa(telefone, texto, sessao) {
   historico.push({ role: 'assistant', content: resposta });
   const novaSessao = { historicoLissa: historico };
   if (regiao) novaSessao.regiaoCorpo = regiao;
+
+  // Detecta contexto Pilates na resposta atual
+  if (respostaLimpa.toLowerCase().includes('pilates') || resposta.toLowerCase().includes('pilates')) {
+    novaSessao.contextoPilates = true;
+  }
+
   setSessao(telefone, novaSessao);
 
   await enviarMensagem(telefone, respostaLimpa);
@@ -337,6 +351,14 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
   }
 
   if (temNao && !temSim) {
+    // Se contexto é Pilates — encerra com agradecimento
+    if (sessao.contextoPilates || contextoPilatesAtivo(sessao)) {
+      setSessao(telefone, { etapa: 'encerrado' });
+      return enviarMensagem(telefone,
+        `Tudo bem, sem problemas! 😊\n\nFoi um prazer conversar com você. Quando quiser conhecer o Pilates ou qualquer outro serviço da *Clínica Lituânia*, é só nos enviar um *Olá*! 👋`
+      );
+    }
+
     await enviarMensagem(telefone,
       `Tudo bem, não se preocupe! 😊\n\n` +
       `O encaminhamento médico não é obrigatório para iniciar o tratamento. ` +
@@ -383,13 +405,11 @@ async function handleTipoCliente(telefone, texto, sessao) {
 
 async function handleParaQuem(telefone, texto, sessao) {
   if (texto === '1') {
-    // Para si mesmo
     const cliente = sessao.clienteResponsavel;
     setSessao(telefone, { cliente });
     return iniciarFluxoAgendamento(telefone, cliente);
   }
   if (texto === '2') {
-    // Para outra pessoa
     setSessao(telefone, { etapa: 'aguardando_cpf_terceiro' });
     return enviarMensagem(telefone, `Por favor, informe o *CPF* da pessoa para quem deseja agendar:\n\nExemplo: 12345678901`);
   }
@@ -406,7 +426,6 @@ async function handleCPFTerceiro(telefone, texto, sessao) {
     await enviarMensagem(telefone, `✅ Encontrei o cadastro de *${cliente.Nome}*! 😊`);
     return iniciarFluxoAgendamento(telefone, cliente);
   }
-  // Não encontrou — cria cadastro
   setSessao(telefone, { etapa: 'aguardando_nome_terceiro', cpfTerceiro: cpf });
   return enviarMensagem(telefone, `Cadastro não encontrado. Vamos criar! 😊\n\nQual é o *nome completo* da pessoa?`);
 }
@@ -442,13 +461,13 @@ async function handleCPF(telefone, texto, sessao) {
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (!cliente) return enviarMensagem(telefone, `❌ CPF *${formatarCPF(cpf)}* não encontrado.\n\nVerifique o CPF ou *0* para voltar ao menu.\n\n${CONTATO_HUMANO}`);
   salvarClientePorTelefone(telefone, cliente);
-  setSessao(telefone, { cliente });
   if (sessao.acao === 'agendar') {
     setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente });
     return enviarMensagem(telefone,
       `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
     );
   }
+  setSessao(telefone, { cliente });
   switch (sessao.acao) {
     case 'cancelar': return mostrarAgendamentos(telefone, cliente, 'cancelar');
     case 'reagendar':return mostrarAgendamentos(telefone, cliente, 'reagendar');
@@ -703,6 +722,14 @@ async function handleFAQ(telefone, texto) {
   const resposta = buscarResposta(texto);
   if (!resposta) return enviarMensagem(telefone, `Opção inválida.\n\n${listarFAQs()}\n\n*0* para voltar.`);
   return enviarMensagem(telefone, `${resposta}\n\n_Outra dúvida? Digite o número ou *0* para voltar._`);
+}
+
+function contextoPilatesAtivo(sessao) {
+  const historico = sessao.historicoLissa || [];
+  for (let i = historico.length - 1; i >= 0; i--) {
+    if (historico[i]?.content?.toLowerCase().includes('pilates')) return true;
+  }
+  return false;
 }
 
 module.exports = { processarMensagem };
