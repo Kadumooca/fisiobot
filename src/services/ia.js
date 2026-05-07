@@ -21,8 +21,8 @@ Avaliação incluída na primeira sessão (cobrada).
 
 🧘 PILATES
 - Sessão avulsa (1h): R$ 90 — PIX ou débito
-- Mensal 1x/semana: R$ 325 — PIX ou débito ⭐ Melhor custo-benefício
-- Mensal 2x/semana: R$ 415 — PIX ou débito
+- Mensal 1x/semana: R$ 325 — PIX ou débito
+- Mensal 2x/semana: R$ 415 — PIX ou débito ⭐ Melhor custo-benefício
 - Trimestral 1x/semana: R$ 945 — PIX ou débito
 - Trimestral 2x/semana: R$ 1.210 — PIX ou débito
 Máximo 3 alunos por turma, 1 hora, fisioterapeutas experientes.
