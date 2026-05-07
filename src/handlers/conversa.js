@@ -199,6 +199,10 @@ async function processarMensagem(telefone, mensagem) {
     case 'conversando_com_lissa':               return handleLissa(telefone, texto, sessao);
     case 'aguardando_resposta_agendamento':     return handleRespostaAgendamento(telefone, texto, sessao);
     case 'aguardando_tipo_cliente':             return handleTipoCliente(telefone, texto, sessao);
+    case 'aguardando_para_quem':                return handleParaQuem(telefone, texto, sessao);
+    case 'aguardando_cpf_terceiro':             return handleCPFTerceiro(telefone, texto, sessao);
+    case 'aguardando_nome_terceiro':            return handleNomeTerceiro(telefone, texto, sessao);
+    case 'aguardando_celular_terceiro':         return handleCelularTerceiro(telefone, texto, sessao);
     case 'aguardando_cpf':                      return handleCPF(telefone, texto, sessao);
     case 'aguardando_cpf_novo':                 return handleCPFNovo(telefone, texto, sessao);
     case 'aguardando_nome_novo':                return handleNomeNovo(telefone, texto, sessao);
@@ -285,16 +289,8 @@ async function handleLissa(telefone, texto, sessao) {
 
   await enviarMensagem(telefone, respostaLimpa);
 
-  if (encerrar) {
-    setSessao(telefone, { etapa: 'encerrado' });
-    return;
-  }
-
-  if (ofereceAgendamento) {
-    setSessao(telefone, { etapa: 'aguardando_resposta_agendamento' });
-    return;
-  }
-
+  if (encerrar) { setSessao(telefone, { etapa: 'encerrado' }); return; }
+  if (ofereceAgendamento) { setSessao(telefone, { etapa: 'aguardando_resposta_agendamento' }); return; }
   if (historico.length >= 12) {
     return enviarMensagem(telefone, `💬 Para um atendimento mais personalizado:\n\n${CONTATO_HUMANO}\n\nOu *0* para voltar ao menu.`);
   }
@@ -304,11 +300,11 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
   const textoLower = texto.toLowerCase().trim();
 
   const respostaSim = [
-    'sim', 's', 'sim!', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos',
-    'pode ser', 'topo', 'quero sim', 'com certeza', 'tenho', 'já fui',
-    'ja fui', 'já consultei', 'ja consultei', 'tenho sim', 'já tenho',
-    'ja tenho', 'fui sim', 'consultei', 'tenho encaminhamento',
-    'podemos continuar', 'pode continuar', 'continuar', 'continua'
+    'sim', 's', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos', 'pode ser',
+    'topo', 'quero sim', 'com certeza', 'tenho', 'já fui', 'ja fui',
+    'já consultei', 'ja consultei', 'tenho sim', 'já tenho', 'ja tenho',
+    'fui sim', 'consultei', 'tenho encaminhamento', 'podemos continuar',
+    'pode continuar', 'continuar', 'continua'
   ];
 
   const respostaNao = [
@@ -358,10 +354,17 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
 async function handleTipoCliente(telefone, texto, sessao) {
   const clienteSalvo = await buscarClientePorTelefone(telefone);
   if (clienteSalvo) {
+    setSessao(telefone, { clienteResponsavel: clienteSalvo });
+    if (sessao.acao === 'agendar') {
+      await enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊`);
+      setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: clienteSalvo });
+      return enviarMensagem(telefone,
+        `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
+      );
+    }
     setSessao(telefone, { cliente: clienteSalvo });
     await enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊`);
     switch (sessao.acao) {
-      case 'agendar':  return iniciarFluxoAgendamento(telefone, clienteSalvo);
       case 'cancelar': return mostrarAgendamentos(telefone, clienteSalvo, 'cancelar');
       case 'reagendar':return mostrarAgendamentos(telefone, clienteSalvo, 'reagendar');
       case 'listar':   return mostrarAgendamentos(telefone, clienteSalvo, 'listar');
@@ -378,6 +381,60 @@ async function handleTipoCliente(telefone, texto, sessao) {
   return enviarMensagem(telefone, `Opção inválida. Digite *1* para paciente existente ou *2* para novo paciente.`);
 }
 
+async function handleParaQuem(telefone, texto, sessao) {
+  if (texto === '1') {
+    // Para si mesmo
+    const cliente = sessao.clienteResponsavel;
+    setSessao(telefone, { cliente });
+    return iniciarFluxoAgendamento(telefone, cliente);
+  }
+  if (texto === '2') {
+    // Para outra pessoa
+    setSessao(telefone, { etapa: 'aguardando_cpf_terceiro' });
+    return enviarMensagem(telefone, `Por favor, informe o *CPF* da pessoa para quem deseja agendar:\n\nExemplo: 12345678901`);
+  }
+  return enviarMensagem(telefone, `Opção inválida. Digite *1* para você ou *2* para outra pessoa.`);
+}
+
+async function handleCPFTerceiro(telefone, texto, sessao) {
+  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
+  const cpf = limparCPF(texto);
+  await enviarMensagem(telefone, '🔍 Buscando cadastro...');
+  const cliente = await fisiosoft.buscarClientePorCPF(cpf);
+  if (cliente) {
+    setSessao(telefone, { cliente });
+    await enviarMensagem(telefone, `✅ Encontrei o cadastro de *${cliente.Nome}*! 😊`);
+    return iniciarFluxoAgendamento(telefone, cliente);
+  }
+  // Não encontrou — cria cadastro
+  setSessao(telefone, { etapa: 'aguardando_nome_terceiro', cpfTerceiro: cpf });
+  return enviarMensagem(telefone, `Cadastro não encontrado. Vamos criar! 😊\n\nQual é o *nome completo* da pessoa?`);
+}
+
+async function handleNomeTerceiro(telefone, texto, sessao) {
+  if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe o *nome completo*:`);
+  setSessao(telefone, { etapa: 'aguardando_celular_terceiro', nomeTerceiro: texto });
+  return enviarMensagem(telefone, `Qual é o *celular* da pessoa com DDD?\n\nExemplo: 11999999999`);
+}
+
+async function handleCelularTerceiro(telefone, texto, sessao) {
+  const celular = texto.replace(/\D/g, '');
+  if (celular.length < 10) return enviarMensagem(telefone, `Celular inválido. Informe com DDD.\n\nExemplo: 11999999999`);
+  await enviarMensagem(telefone, '⏳ Criando cadastro...');
+  const novoCliente = await fisiosoft.incluirCliente({
+    Nome: sessao.nomeTerceiro, Cpf: sessao.cpfTerceiro,
+    Celular: celular, Email: '', Sexo: 'F',
+  });
+  if (!novoCliente) {
+    setSessao(telefone, { etapa: 'menu' });
+    return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
+  }
+  const cliente = { Id: novoCliente, Nome: sessao.nomeTerceiro };
+  setSessao(telefone, { cliente });
+  await enviarMensagem(telefone, `✅ Cadastro criado para *${sessao.nomeTerceiro}*! 🎉`);
+  return iniciarFluxoAgendamento(telefone, cliente);
+}
+
 async function handleCPF(telefone, texto, sessao) {
   if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
   const cpf = limparCPF(texto);
@@ -386,8 +443,13 @@ async function handleCPF(telefone, texto, sessao) {
   if (!cliente) return enviarMensagem(telefone, `❌ CPF *${formatarCPF(cpf)}* não encontrado.\n\nVerifique o CPF ou *0* para voltar ao menu.\n\n${CONTATO_HUMANO}`);
   salvarClientePorTelefone(telefone, cliente);
   setSessao(telefone, { cliente });
+  if (sessao.acao === 'agendar') {
+    setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente });
+    return enviarMensagem(telefone,
+      `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
+    );
+  }
   switch (sessao.acao) {
-    case 'agendar':  return iniciarFluxoAgendamento(telefone, cliente);
     case 'cancelar': return mostrarAgendamentos(telefone, cliente, 'cancelar');
     case 'reagendar':return mostrarAgendamentos(telefone, cliente, 'reagendar');
     case 'listar':   return mostrarAgendamentos(telefone, cliente, 'listar');
@@ -427,15 +489,17 @@ async function handleEmailNovo(telefone, texto, sessao) {
   }
   const cliente = { Id: novoCliente, Nome: sessao.nomeNovo };
   salvarClientePorTelefone(telefone, cliente);
-  setSessao(telefone, { cliente });
+  setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente });
   await enviarMensagem(telefone, `✅ Cadastro criado com sucesso, *${sessao.nomeNovo}*! 🎉`);
-  return iniciarFluxoAgendamento(telefone, cliente);
+  return enviarMensagem(telefone,
+    `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
+  );
 }
 
 async function iniciarFluxoAgendamento(telefone, cliente) {
   setSessao(telefone, { etapa: 'aguardando_especialidade', cliente });
   return enviarMensagem(telefone,
-    `✅ Olá, *${cliente.Nome}*!\n\nQual especialidade deseja agendar?\n\n` +
+    `✅ Agendando para *${cliente.Nome}*!\n\nQual especialidade deseja agendar?\n\n` +
     `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
     `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem Relaxante\n\n*0* para voltar ao menu`
   );
