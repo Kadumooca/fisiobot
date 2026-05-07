@@ -182,9 +182,7 @@ async function processarMensagem(telefone, mensagem) {
     }
   }
 
-  if (texto === '0') {
-    return voltarAnterior(telefone, sessao);
-  }
+  if (texto === '0') return voltarAnterior(telefone, sessao);
 
   if (textoLower === 'sair') {
     setSessao(telefone, { etapa: 'encerrado' });
@@ -526,7 +524,8 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     await enviarMensagem(telefone,
       `📋 *Orientações para sua consulta:*\n\n` +
       `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
-      `👕 Vista roupa leve para vir à clínica`
+      `👕 Vista roupa leve para vir à clínica\n` +
+      `ℹ️ A avaliação está incluída na sua primeira sessão`
     );
     await enviarMensagem(telefone,
       `🏊 *Orientações para Hidroterapia:*\n\n` +
@@ -547,6 +546,7 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     await enviarMensagem(telefone,
       `📋 *Orientações para o RPG:*\n\n` +
       `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
+      `ℹ️ A avaliação está incluída na sua primeira sessão\n` +
       `👕 Vista *roupa leve para ginástica*\n` +
       `🔄 Temos vestiários disponíveis caso queira se trocar na clínica\n` +
       `⏱️ Sessão individual de *1 hora*, realizada *1x por semana*`
@@ -555,7 +555,8 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     await enviarMensagem(telefone,
       `📋 *Orientações para sua consulta:*\n\n` +
       `📁 Traga seus *exames* e *encaminhamento médico* (se houver)\n` +
-      `👕 Vista roupa leve e adequada para o tratamento`
+      `👕 Vista roupa leve e adequada para o tratamento\n` +
+      `ℹ️ A avaliação está incluída na sua primeira sessão`
     );
   }
 
