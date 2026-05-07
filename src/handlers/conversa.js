@@ -119,9 +119,11 @@ function extrairRegiao(texto) {
 
 function limparTextoIA(texto) {
   return texto
-    .replace(/\[REGIAO\s*:\s*[^\]]+\]/gi, '')
+    .replace(/\[REGIAO\s*:\s*[^\]]*\]/gi, '')
     .replace(/\[OFERECER_AGENDAMENTO\]/gi, '')
     .replace(/\[ENCERRAR\]/gi, '')
+    .replace(/REGIAO\s*:\s*[\w\s]+/gi, '')
+    .replace(/\[REGIAO[^\]]*\]/gi, '')
     .trim();
 }
 
@@ -147,7 +149,6 @@ async function processarMensagem(telefone, mensagem) {
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
 
-  // Encerrado — pergunta se quer abrir menu
   if (sessao.etapa === 'encerrado') {
     const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
     const ativouSite = FRASES_SITE.some(p => textoLower.includes(p));
@@ -160,22 +161,19 @@ async function processarMensagem(telefone, mensagem) {
     return;
   }
 
-  // Aguardando escolha: menu ou conversa
   if (sessao.etapa === 'aguardando_escolha_menu') {
     if (texto === '1' || textoLower.includes('sim') || textoLower.includes('menu')) {
       setSessao(telefone, { etapa: 'menu' });
       return enviarMensagem(telefone, MENU_PRINCIPAL);
     }
-    if (texto === '2' || textoLower.includes('não') || textoLower.includes('nao') || textoLower.includes('conversar') || textoLower.includes('quero conversar')) {
+    if (texto === '2' || textoLower.includes('não') || textoLower.includes('nao') || textoLower.includes('conversar')) {
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
     }
-    // Resposta ambígua — abre menu
     setSessao(telefone, { etapa: 'menu' });
     return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
 
-  // Detecta agradecimento durante conversa ativa
   if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
     const etapasAtivas = ['conversando_com_lissa', 'aguardando_resposta_agendamento'];
     if (etapasAtivas.includes(sessao.etapa)) {
@@ -324,7 +322,6 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     'nao tenho medico'
   ];
 
-  // Agradecimento — encerra sem agendar
   if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
     setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `De nada! 😊 Foi um prazer te atender.\n\nEsperamos te ver em breve na *Clínica Lituânia*!\n\nQuando precisar, é só nos enviar um *Olá*. 👋`);
