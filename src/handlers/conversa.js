@@ -26,6 +26,7 @@ Digite o número da opção desejada.`;
 
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_SITE = ['olá, gostaria de mais informações', 'ola, gostaria de mais informacoes', 'gostaria de mais informações', 'gostaria de mais informacoes'];
+const PALAVRAS_AGRADECIMENTO = ['obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks', 'agradeço', 'agradeco', 'grato', 'grata', 'muito obrigado', 'muito obrigada'];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const AGENDAS_POR_ESPECIALIDADE = {
@@ -120,6 +121,7 @@ function limparTextoIA(texto) {
   return texto
     .replace(/\[REGIAO\s*:\s*[^\]]+\]/gi, '')
     .replace(/\[OFERECER_AGENDAMENTO\]/gi, '')
+    .replace(/\[ENCERRAR\]/gi, '')
     .trim();
 }
 
@@ -145,14 +147,41 @@ async function processarMensagem(telefone, mensagem) {
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
 
+  // Encerrado — pergunta se quer abrir menu
   if (sessao.etapa === 'encerrado') {
     const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
     const ativouSite = FRASES_SITE.some(p => textoLower.includes(p));
     if (ativou || ativouSite) {
-      resetarSessao(telefone);
-      return enviarMensagem(telefone, MENU_PRINCIPAL);
+      setSessao(telefone, { etapa: 'aguardando_escolha_menu' });
+      return enviarMensagem(telefone,
+        `Olá! 😊 Seja bem-vindo(a) à *Clínica Lituânia*!\n\nDeseja ver o menu de opções?\n\n*1.* ✅ Sim, quero ver o menu\n*2.* 💬 Não, quero conversar`
+      );
     }
     return;
+  }
+
+  // Aguardando escolha: menu ou conversa
+  if (sessao.etapa === 'aguardando_escolha_menu') {
+    if (texto === '1' || textoLower.includes('sim') || textoLower.includes('menu')) {
+      setSessao(telefone, { etapa: 'menu' });
+      return enviarMensagem(telefone, MENU_PRINCIPAL);
+    }
+    if (texto === '2' || textoLower.includes('não') || textoLower.includes('nao') || textoLower.includes('conversar') || textoLower.includes('quero conversar')) {
+      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
+      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
+    }
+    // Resposta ambígua — abre menu
+    setSessao(telefone, { etapa: 'menu' });
+    return enviarMensagem(telefone, MENU_PRINCIPAL);
+  }
+
+  // Detecta agradecimento durante conversa ativa
+  if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
+    const etapasAtivas = ['conversando_com_lissa', 'aguardando_resposta_agendamento'];
+    if (etapasAtivas.includes(sessao.etapa)) {
+      setSessao(telefone, { etapa: 'encerrado' });
+      return enviarMensagem(telefone, `De nada! 😊 Foi um prazer te atender.\n\nEsperamos te ver em breve na *Clínica Lituânia*!\n\nQuando precisar, é só nos enviar um *Olá*. 👋`);
+    }
   }
 
   if (texto === '0') {
@@ -235,8 +264,7 @@ async function handleMenu(telefone, texto) {
     case '6':
       setSessao(telefone, { etapa: 'aguardando_faq' });
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
-   default:
-      // Qualquer coisa fora do menu encerra silenciosamente
+    default:
       setSessao(telefone, { etapa: 'encerrado' });
       return;
   }
@@ -251,6 +279,7 @@ async function handleLissa(telefone, texto, sessao) {
 
   const regiao = extrairRegiao(resposta);
   const ofereceAgendamento = resposta.includes('[OFERECER_AGENDAMENTO]');
+  const encerrar = resposta.includes('[ENCERRAR]');
   const respostaLimpa = limparTextoIA(resposta);
 
   historico.push({ role: 'assistant', content: resposta });
@@ -259,6 +288,11 @@ async function handleLissa(telefone, texto, sessao) {
   setSessao(telefone, novaSessao);
 
   await enviarMensagem(telefone, respostaLimpa);
+
+  if (encerrar) {
+    setSessao(telefone, { etapa: 'encerrado' });
+    return;
+  }
 
   if (ofereceAgendamento) {
     setSessao(telefone, { etapa: 'aguardando_resposta_agendamento' });
@@ -289,6 +323,12 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     'nao tenho encaminhamento', 'sem encaminhamento', 'não tenho médico',
     'nao tenho medico'
   ];
+
+  // Agradecimento — encerra sem agendar
+  if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
+    setSessao(telefone, { etapa: 'encerrado' });
+    return enviarMensagem(telefone, `De nada! 😊 Foi um prazer te atender.\n\nEsperamos te ver em breve na *Clínica Lituânia*!\n\nQuando precisar, é só nos enviar um *Olá*. 👋`);
+  }
 
   const temSim = respostaSim.some(p => textoLower === p || textoLower.includes(p));
   const temNao = respostaNao.some(p => textoLower === p || textoLower.includes(p));
@@ -470,7 +510,6 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
   const nomeAgenda = sessao.agendaSelecionada.agendaNome.toUpperCase();
   const regiao = sessao.regiaoCorpo || null;
 
-  // Mensagem 1 — Confirmação
   await enviarMensagem(telefone,
     `✅ *Agendamento confirmado!*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
@@ -479,7 +518,6 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     `Até lá! 😊`
   );
 
-  // Mensagem 2 — Orientações específicas por especialidade
   if (nomeAgenda.includes('FISIOTERAPIA')) {
     const orientacaoRoupa = gerarOrientacaoRoupa(regiao);
     await enviarMensagem(telefone,
@@ -524,7 +562,6 @@ async function handleConfirmacaoAgendamento(telefone, texto, sessao) {
     );
   }
 
-  // Mensagem 3 — Informação sobre próximas sessões
   await enviarMensagem(telefone,
     `📌 *Informação importante:*\n\n` +
     `O horário agendado é válido para esta sessão. Para dar continuidade ao seu tratamento, as próximas sessões deverão ser agendadas diretamente na recepção da clínica — nossa equipe terá prazer em encontrar os melhores horários para a sua rotina! 😊\n\n` +
