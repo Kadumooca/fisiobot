@@ -10,19 +10,22 @@ const WHATSAPP_RECEPCAO = 'https://wa.me/5511987281427';
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n💬 WhatsApp: wa.me/5511987281427\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
 const ENDERECO = `📍 *Clínica Lituânia*\nRua Lituânia, 209 - Mooca\nCEP 03184-020 - São Paulo/SP\n📞 (11) 2268-3195\n💬 WhatsApp: ${WHATSAPP_RECEPCAO}`;
 
-const MENU_PRINCIPAL = `👋 Olá! Bem-vindo(a) à *Clínica Lituânia*!
+const MENU_PRINCIPAL = `━━━━━━━━━━━━━━━━━━
+🏥 *Clínica Lituânia*
+━━━━━━━━━━━━━━━━━━
 
-Como posso te ajudar hoje?
+Olá! Como posso te ajudar? 😊
 
-*1.* 💬 Falar com a Lissa (tire dúvidas, conheça nossos serviços)
-*2.* 📅 Agendar consulta
-*3.* ❌ Cancelar agendamento
-*4.* 🔄 Reagendar consulta
-*5.* 🗓️ Ver meus agendamentos
-*6.* ❓ Dúvidas frequentes
-*0.* 🔚 Encerrar atendimento
+1️⃣  💬 Falar com a Lissa - Assistente Virtual
+2️⃣  📅 Agendar consulta
+3️⃣  ❌ Cancelar agendamento
+4️⃣  🔄 Reagendar consulta
+5️⃣  🗓️ Ver meus agendamentos
+6️⃣  ❓ Dúvidas frequentes
 
-Digite o número da opção desejada.`;
+0️⃣  🔚 Encerrar atendimento
+━━━━━━━━━━━━━━━━━━
+_Digite o número da opção_`;
 
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_SITE = ['olá, gostaria de mais informações', 'ola, gostaria de mais informacoes', 'gostaria de mais informações', 'gostaria de mais informacoes'];
@@ -215,7 +218,6 @@ async function processarMensagem(telefone, mensagem) {
     case 'aguardando_cpf_novo':                 return handleCPFNovo(telefone, texto, sessao);
     case 'aguardando_nome_novo':                return handleNomeNovo(telefone, texto, sessao);
     case 'aguardando_celular_novo':             return handleCelularNovo(telefone, texto, sessao);
-    case 'aguardando_email_novo':               return handleEmailNovo(telefone, texto, sessao);
     case 'aguardando_especialidade':            return handleEspecialidade(telefone, texto, sessao);
     case 'aguardando_periodo':                  return handlePeriodo(telefone, texto, sessao);
     case 'aguardando_horario':                  return handleHorario(telefone, texto, sessao);
@@ -293,12 +295,9 @@ async function handleLissa(telefone, texto, sessao) {
   historico.push({ role: 'assistant', content: resposta });
   const novaSessao = { historicoLissa: historico };
   if (regiao) novaSessao.regiaoCorpo = regiao;
-
-  // Detecta contexto Pilates na resposta atual
   if (respostaLimpa.toLowerCase().includes('pilates') || resposta.toLowerCase().includes('pilates')) {
     novaSessao.contextoPilates = true;
   }
-
   setSessao(telefone, novaSessao);
 
   await enviarMensagem(telefone, respostaLimpa);
@@ -351,14 +350,12 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
   }
 
   if (temNao && !temSim) {
-    // Se contexto é Pilates — encerra com agradecimento
     if (sessao.contextoPilates || contextoPilatesAtivo(sessao)) {
       setSessao(telefone, { etapa: 'encerrado' });
       return enviarMensagem(telefone,
         `Tudo bem, sem problemas! 😊\n\nFoi um prazer conversar com você. Quando quiser conhecer o Pilates ou qualquer outro serviço da *Clínica Lituânia*, é só nos enviar um *Olá*! 👋`
       );
     }
-
     await enviarMensagem(telefone,
       `Tudo bem, não se preocupe! 😊\n\n` +
       `O encaminhamento médico não é obrigatório para iniciar o tratamento. ` +
@@ -376,7 +373,6 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
 async function handleTipoCliente(telefone, texto, sessao) {
   const clienteSalvo = await buscarClientePorTelefone(telefone);
   if (clienteSalvo) {
-    setSessao(telefone, { clienteResponsavel: clienteSalvo });
     if (sessao.acao === 'agendar') {
       await enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊`);
       setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: clienteSalvo });
@@ -473,6 +469,19 @@ async function handleCPF(telefone, texto, sessao) {
     case 'reagendar':return mostrarAgendamentos(telefone, cliente, 'reagendar');
     case 'listar':   return mostrarAgendamentos(telefone, cliente, 'listar');
   }
+}
+
+async function handleNomeNovo(telefone, texto, sessao) {
+  if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe seu *nome completo*:`);
+  setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto });
+  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
+}
+
+async function handleCPFNovo(telefone, texto, sessao) {
+  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
+  const cpf = limparCPF(texto);
+  setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: cpf });
+  return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
 }
 
 async function handleCelularNovo(telefone, texto, sessao) {
@@ -703,14 +712,6 @@ async function handleFAQ(telefone, texto) {
   const resposta = buscarResposta(texto);
   if (!resposta) return enviarMensagem(telefone, `Opção inválida.\n\n${listarFAQs()}\n\n*0* para voltar.`);
   return enviarMensagem(telefone, `${resposta}\n\n_Outra dúvida? Digite o número ou *0* para voltar._`);
-}
-
-function contextoPilatesAtivo(sessao) {
-  const historico = sessao.historicoLissa || [];
-  for (let i = historico.length - 1; i >= 0; i--) {
-    if (historico[i]?.content?.toLowerCase().includes('pilates')) return true;
-  }
-  return false;
 }
 
 module.exports = { processarMensagem };
