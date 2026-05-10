@@ -91,7 +91,11 @@ app.post('/webhook', async (req, res) => {
     const mensagem = body.data?.message?.conversation ||
                      body.data?.message?.extendedTextMessage?.text;
 
-    if (detectarMidiaOuPerguntaSobreAudio(body, mensagem)) {
+   if (detectarMidiaOuPerguntaSobreAudio(body, mensagem)) {
+      // Se sessão encerrada e veio mídia — ignora silenciosamente
+      const sessaoAtual = getSessao(telefone);
+      if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
+      // Se conversa ativa — avisa que só aceita texto
       await enviarMensagem(telefone, MSG_APENAS_TEXTO);
       return res.sendStatus(200);
     }
