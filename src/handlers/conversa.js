@@ -475,32 +475,13 @@ async function handleCPF(telefone, texto, sessao) {
   }
 }
 
-async function handleNomeNovo(telefone, texto, sessao) {
-  if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe seu *nome completo*:`);
-  setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto });
-  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
-}
-
-async function handleCPFNovo(telefone, texto, sessao) {
-  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
-  const cpf = limparCPF(texto);
-  setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: cpf });
-  return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
-}
-
 async function handleCelularNovo(telefone, texto, sessao) {
   const celular = texto.replace(/\D/g, '');
   if (celular.length < 10) return enviarMensagem(telefone, `Celular inválido. Informe com DDD.\n\nExemplo: 11999999999`);
-  setSessao(telefone, { etapa: 'aguardando_email_novo', celularNovo: celular });
-  return enviarMensagem(telefone, `Qual é o seu *e-mail*?\n\n_Digite *pular* se preferir não informar._`);
-}
-
-async function handleEmailNovo(telefone, texto, sessao) {
-  const email = texto.toLowerCase() === 'pular' ? '' : texto;
   await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
   const novoCliente = await fisiosoft.incluirCliente({
     Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo,
-    Celular: sessao.celularNovo, Email: email, Sexo: 'F',
+    Celular: celular, Email: '', Sexo: 'F',
   });
   if (!novoCliente) {
     setSessao(telefone, { etapa: 'menu' });
