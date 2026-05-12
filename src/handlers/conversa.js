@@ -90,7 +90,7 @@ const AGENDAS_POR_ESPECIALIDADE = {
     ]
   },
   '7': {
-    nome: 'Drenagem / Massagem Relaxante',
+    nome: 'Drenagem / Massagem Relaxante / Liberação Miofascial',
     periodos: [
       { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
     ]
@@ -288,7 +288,9 @@ async function handleMenu(telefone, texto) {
       return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, atendente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
     case '7':
       setSessao(telefone, { etapa: 'encerrado' });
-      return;
+      return enviarMensagem(telefone,
+        `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`
+      );
     default:
       setSessao(telefone, { etapa: 'encerrado' });
       return;
