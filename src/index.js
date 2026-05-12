@@ -28,25 +28,18 @@ function agendarTimeoutsInatividade(telefone) {
   const sessao = getSessao(telefone);
   if (sessao.etapa === 'encerrado' || sessao.etapa === 'menu') return;
 
-  // 15 min — 1ª reativação
   const t1 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
-    await enviarMensagem(telefone,
-      `Olá! 😊 Ainda está por aí? Estou aqui caso queira continuar ou tirar alguma dúvida!`
-    );
+    await enviarMensagem(telefone, `Olá! 😊 Ainda está por aí? Estou aqui caso queira continuar ou tirar alguma dúvida!`);
   }, 15 * 60 * 1000);
 
-  // 30 min — 2ª reativação
   const t2 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
-    await enviarMensagem(telefone,
-      `Oi novamente! 😊 Caso queira retomar nossa conversa ou agendar um horário na *Clínica Lituânia*, estou à disposição!`
-    );
+    await enviarMensagem(telefone, `Oi novamente! 😊 Caso queira retomar nossa conversa ou agendar um horário na *Clínica Lituânia*, estou à disposição!`);
   }, 30 * 60 * 1000);
 
-  // 45 min — encerra
   const t3 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
@@ -65,7 +58,6 @@ function agendarTimeoutsOferta(telefone) {
   const sessao = getSessao(telefone);
   if (sessao.etapa !== 'aguardando_resposta_agendamento') return;
 
-  // 5 min — 1ª tentativa
   const t1 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
@@ -74,7 +66,6 @@ function agendarTimeoutsOferta(telefone) {
     );
   }, 5 * 60 * 1000);
 
-  // 15 min — 2ª tentativa e encerra
   const t2 = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
@@ -129,7 +120,6 @@ app.post('/webhook', async (req, res) => {
     const mensagem = body.data?.message?.conversation ||
                      body.data?.message?.extendedTextMessage?.text;
 
-    // Mídia — se sessão encerrada ignora, senão avisa
     if (detectarMidiaOuPerguntaSobreAudio(body, mensagem)) {
       const sessaoAtual = getSessao(telefone);
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
@@ -141,12 +131,9 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`Mensagem de ${telefone}: ${mensagem}`);
 
-    // Cancela timeouts ao receber mensagem
     limparTimeouts(telefone);
-
     await processarMensagem(telefone, mensagem);
 
-    // Agenda timeouts conforme etapa atual
     const sessaoAtual = getSessao(telefone);
     if (sessaoAtual.etapa === 'aguardando_resposta_agendamento') {
       agendarTimeoutsOferta(telefone);
