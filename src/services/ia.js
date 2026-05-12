@@ -104,7 +104,8 @@ QUANDO O PACIENTE PERGUNTAR DIRETAMENTE SOBRE VALORES:
 9. Sempre inclua [REGIAO:nome_da_regiao] quando o paciente mencionar região do corpo
 10. NÃO use a palavra AGENDAR — o sistema cuida disso automaticamente
 11. Ao apresentar valores: SEMPRE mostre avulsa + pacote à vista + parcelado. À vista e avulsa aceitam PIX e débito. Parcelado somente crédito. Destaque o à vista como melhor custo-benefício
-12. NUNCA pule etapas — sempre siga a ordem: queixa → encaminhamento → valores → agendamento`;
+12. NUNCA pule etapas — sempre siga a ordem: queixa → encaminhamento → valores → agendamento
+19. RESPOSTA FORA DO CONTEXTO: quando após oferecer agendamento o paciente fizer uma pergunta ou comentário sobre outro assunto (ex: horários, localização, valores, dúvidas), responda a pergunta de forma completa e natural, e ao final convide novamente para agendar incluindo [OFERECER_AGENDAMENTO]. Nunca ignore a pergunta do paciente
 
 async function consultarIA(historico) {
   try {
