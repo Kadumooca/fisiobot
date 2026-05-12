@@ -25,7 +25,8 @@ Olá! Como posso te ajudar? 😊
 
 0️⃣  🔚 Encerrar atendimento
 ━━━━━━━━━━━━━━━━━━
-_Digite o número da opção_`;
+_Digite o número da opção_
+_Digite *sair* para encerrar_`;
 
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_SITE = ['olá, gostaria de mais informações', 'ola, gostaria de mais informacoes', 'gostaria de mais informações', 'gostaria de mais informacoes'];
@@ -166,7 +167,14 @@ async function processarMensagem(telefone, mensagem) {
     if (ativou || ativouSite) {
       setSessao(telefone, { etapa: 'aguardando_escolha_menu' });
       return enviarMensagem(telefone,
-        `Olá! 😊 Seja bem-vindo(a) à *Clínica Lituânia*!\n\nDeseja ver o menu de opções?\n\n*1.* ✅ Sim, quero ver o menu\n*2.* 💬 Não, quero conversar`
+        `Olá! 😊 Seja bem-vindo(a) à *Clínica Lituânia*!\n\nComo posso te ajudar?\n\n*1.* ✅ Ver o menu de opções\n*2.* 💬 Conversar com a Lissa\n*3.* 👤 Falar com um atendente\n\n_Digite *sair* para encerrar_`
+      );
+    }
+    // Qualquer outra mensagem — oferece as opções
+    if (texto.length > 0) {
+      setSessao(telefone, { etapa: 'aguardando_escolha_menu' });
+      return enviarMensagem(telefone,
+        `Olá! 😊 Seja bem-vindo(a) à *Clínica Lituânia*!\n\nComo posso te ajudar?\n\n*1.* ✅ Ver o menu de opções\n*2.* 💬 Conversar com a Lissa\n*3.* 👤 Falar com um atendente\n\n_Digite *sair* para encerrar_`
       );
     }
     return;
@@ -177,9 +185,19 @@ async function processarMensagem(telefone, mensagem) {
       setSessao(telefone, { etapa: 'menu' });
       return enviarMensagem(telefone, MENU_PRINCIPAL);
     }
-    if (texto === '2' || textoLower.includes('não') || textoLower.includes('nao') || textoLower.includes('conversar')) {
+    if (texto === '2' || textoLower.includes('conversar') || textoLower.includes('lissa')) {
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
+    }
+    if (texto === '3' || textoLower.includes('atendente') || textoLower.includes('humano') || textoLower.includes('pessoa')) {
+      setSessao(telefone, { etapa: 'encerrado' });
+      return enviarMensagem(telefone,
+        `Perfeito! 😊 Um momento — nossa equipe entrará em contato com você em breve!\n\nQuando precisar do bot novamente, é só enviar um *Olá*. 👋`
+      );
+    }
+    if (textoLower === 'não' || textoLower === 'nao') {
+      setSessao(telefone, { etapa: 'encerrado' });
+      return enviarMensagem(telefone, `Tudo bem! 😊 Quando precisar, é só nos enviar um *Olá*. 👋`);
     }
     setSessao(telefone, { etapa: 'menu' });
     return enviarMensagem(telefone, MENU_PRINCIPAL);
@@ -269,11 +287,11 @@ async function handleMenu(telefone, texto) {
     case '2': case '3': case '4': case '5': {
       const acoes = { '2': 'agendar', '3': 'cancelar', '4': 'reagendar', '5': 'listar' };
       setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: acoes[texto] });
-      return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente`);
+      return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim, já sou paciente\n*2.* 🆕 Não, sou novo paciente\n\n_Digite *sair* para encerrar_`);
     }
     case '6':
       setSessao(telefone, { etapa: 'aguardando_faq' });
-      return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.`);
+      return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.\n_Digite *sair* para encerrar_`);
     default:
       setSessao(telefone, { etapa: 'encerrado' });
       return;
@@ -377,7 +395,7 @@ async function handleTipoCliente(telefone, texto, sessao) {
       await enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊`);
       setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: clienteSalvo });
       return enviarMensagem(telefone,
-        `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
+        `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa\n\n_Digite *sair* para encerrar_`
       );
     }
     setSessao(telefone, { cliente: clienteSalvo });
@@ -390,11 +408,11 @@ async function handleTipoCliente(telefone, texto, sessao) {
   }
   if (texto === '1') {
     setSessao(telefone, { etapa: 'aguardando_cpf' });
-    return enviarMensagem(telefone, `Por favor, informe seu *CPF* (somente números):\n\nExemplo: 12345678901`);
+    return enviarMensagem(telefone, `Por favor, informe seu *CPF* (somente números):\n\nExemplo: 12345678901\n\n_Digite *sair* para encerrar_`);
   }
   if (texto === '2') {
     setSessao(telefone, { etapa: 'aguardando_nome_novo' });
-    return enviarMensagem(telefone, `Ótimo! Vamos criar seu cadastro. 😊\n\nQual é o seu *nome completo*?`);
+    return enviarMensagem(telefone, `Ótimo! Vamos criar seu cadastro. 😊\n\nQual é o seu *nome completo*?\n\n_Digite *sair* para encerrar_`);
   }
   return enviarMensagem(telefone, `Opção inválida. Digite *1* para paciente existente ou *2* para novo paciente.`);
 }
@@ -407,7 +425,7 @@ async function handleParaQuem(telefone, texto, sessao) {
   }
   if (texto === '2') {
     setSessao(telefone, { etapa: 'aguardando_cpf_terceiro' });
-    return enviarMensagem(telefone, `Por favor, informe o *CPF* da pessoa para quem deseja agendar:\n\nExemplo: 12345678901`);
+    return enviarMensagem(telefone, `Por favor, informe o *CPF* da pessoa para quem deseja agendar:\n\nExemplo: 12345678901\n\n_Digite *sair* para encerrar_`);
   }
   return enviarMensagem(telefone, `Opção inválida. Digite *1* para você ou *2* para outra pessoa.`);
 }
@@ -423,13 +441,13 @@ async function handleCPFTerceiro(telefone, texto, sessao) {
     return iniciarFluxoAgendamento(telefone, cliente);
   }
   setSessao(telefone, { etapa: 'aguardando_nome_terceiro', cpfTerceiro: cpf });
-  return enviarMensagem(telefone, `Cadastro não encontrado. Vamos criar! 😊\n\nQual é o *nome completo* da pessoa?`);
+  return enviarMensagem(telefone, `Cadastro não encontrado. Vamos criar! 😊\n\nQual é o *nome completo* da pessoa?\n\n_Digite *sair* para encerrar_`);
 }
 
 async function handleNomeTerceiro(telefone, texto, sessao) {
   if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe o *nome completo*:`);
   setSessao(telefone, { etapa: 'aguardando_celular_terceiro', nomeTerceiro: texto });
-  return enviarMensagem(telefone, `Qual é o *celular* da pessoa com DDD?\n\nExemplo: 11999999999`);
+  return enviarMensagem(telefone, `Qual é o *celular* da pessoa com DDD?\n\nExemplo: 11999999999\n\n_Digite *sair* para encerrar_`);
 }
 
 async function handleCelularTerceiro(telefone, texto, sessao) {
@@ -460,7 +478,7 @@ async function handleCPF(telefone, texto, sessao) {
   if (sessao.acao === 'agendar') {
     setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente });
     return enviarMensagem(telefone,
-      `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
+      `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa\n\n_Digite *sair* para encerrar_`
     );
   }
   setSessao(telefone, { cliente });
@@ -474,14 +492,14 @@ async function handleCPF(telefone, texto, sessao) {
 async function handleNomeNovo(telefone, texto, sessao) {
   if (texto.length < 3) return enviarMensagem(telefone, `Nome muito curto. Informe seu *nome completo*:`);
   setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto });
-  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
+  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901\n\n_Digite *sair* para encerrar_`);
 }
 
 async function handleCPFNovo(telefone, texto, sessao) {
   if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
   const cpf = limparCPF(texto);
   setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: cpf });
-  return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
+  return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999\n\n_Digite *sair* para encerrar_`);
 }
 
 async function handleCelularNovo(telefone, texto, sessao) {
@@ -501,7 +519,7 @@ async function handleCelularNovo(telefone, texto, sessao) {
   setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente });
   await enviarMensagem(telefone, `✅ Cadastro criado com sucesso, *${sessao.nomeNovo}*! 🎉`);
   return enviarMensagem(telefone,
-    `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`
+    `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa\n\n_Digite *sair* para encerrar_`
   );
 }
 
@@ -510,7 +528,7 @@ async function iniciarFluxoAgendamento(telefone, cliente) {
   return enviarMensagem(telefone,
     `✅ Agendando para *${cliente.Nome}*!\n\nQual especialidade deseja agendar?\n\n` +
     `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
-    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem Relaxante\n\n*0* para voltar ao menu`
+    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem Relaxante\n\n*0* para voltar ao menu\n_Digite *sair* para encerrar_`
   );
 }
 
@@ -523,7 +541,7 @@ async function handleEspecialidade(telefone, texto, sessao) {
   }
   const lista = especialidade.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
   setSessao(telefone, { etapa: 'aguardando_periodo', especialidade });
-  return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número ou *0* para voltar.`);
+  return enviarMensagem(telefone, `✅ *${especialidade.nome}*\n\nQual período prefere?\n\n${lista}\n\nDigite o número ou *0* para voltar.\n_Digite *sair* para encerrar_`);
 }
 
 async function handlePeriodo(telefone, texto, sessao) {
@@ -541,7 +559,7 @@ async function buscarEMostrarHorarios(telefone, cliente, agenda, dias, especiali
     return enviarMensagem(telefone, `😔 Não encontrei horários disponíveis nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}\n\n*0* para voltar.`);
   const lista = horarios.map((h, i) => `*${i+1}.* ${h.diaSemana} ${h.data} às ${h.hora}`).join('\n');
   setSessao(telefone, { etapa: 'aguardando_horario', agendaSelecionada: agenda, horariosDisponiveis: horarios, cliente, especialidade });
-  return enviarMensagem(telefone, `✅ *Horários disponíveis — ${agenda.agendaNome}:*\n\n${lista}\n\nDigite o número do horário desejado ou *0* para voltar.`);
+  return enviarMensagem(telefone, `✅ *Horários disponíveis — ${agenda.agendaNome}:*\n\n${lista}\n\nDigite o número do horário desejado ou *0* para voltar.\n_Digite *sair* para encerrar_`);
 }
 
 async function handleHorario(telefone, texto, sessao) {
@@ -553,7 +571,7 @@ async function handleHorario(telefone, texto, sessao) {
   return enviarMensagem(telefone,
     `📋 *Confirme o agendamento:*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agendaSelecionada.agendaNome}\n` +
-    `📅 ${horarioEscolhido.diaSemana} ${horarioEscolhido.data}\n🕐 ${horarioEscolhido.hora}\n\n*1* confirmar | *2* cancelar`
+    `📅 ${horarioEscolhido.diaSemana} ${horarioEscolhido.data}\n🕐 ${horarioEscolhido.hora}\n\n*1* confirmar | *2* cancelar\n\n_Digite *sair* para encerrar_`
   );
 }
 
@@ -664,7 +682,7 @@ async function mostrarAgendamentos(telefone, cliente, acao) {
   const emoji = acao === 'cancelar' ? '❌' : '🔄';
   const textoAcao = acao === 'cancelar' ? 'cancelar' : 'reagendar';
   setSessao(telefone, { etapa: acao === 'cancelar' ? 'aguardando_cancelamento' : 'aguardando_reagendamento', agendamentos });
-  return enviarMensagem(telefone, `${emoji} Qual deseja *${textoAcao}*?\n\n${lista}\n\nDigite o número ou *0* para voltar.`);
+  return enviarMensagem(telefone, `${emoji} Qual deseja *${textoAcao}*?\n\n${lista}\n\nDigite o número ou *0* para voltar.\n_Digite *sair* para encerrar_`);
 }
 
 async function handleCancelamento(telefone, texto, sessao) {
@@ -678,7 +696,7 @@ async function handleCancelamento(telefone, texto, sessao) {
   const hora = dataHora[1] ? dataHora[1].substring(0, 5) : '';
   return enviarMensagem(telefone,
     `⚠️ Cancelar este agendamento?\n\n` +
-    `👤 ${ag.Cliente || sessao.cliente.Nome}\n📅 ${data} às ${hora}\n💆 ${ag.Procedimento || 'Consulta'}\n\n*1* confirmar | *2* manter`
+    `👤 ${ag.Cliente || sessao.cliente.Nome}\n📅 ${data} às ${hora}\n💆 ${ag.Procedimento || 'Consulta'}\n\n*1* confirmar | *2* manter\n\n_Digite *sair* para encerrar_`
   );
 }
 
@@ -710,8 +728,8 @@ async function handleReagendamento(telefone, texto, sessao) {
 
 async function handleFAQ(telefone, texto) {
   const resposta = buscarResposta(texto);
-  if (!resposta) return enviarMensagem(telefone, `Opção inválida.\n\n${listarFAQs()}\n\n*0* para voltar.`);
-  return enviarMensagem(telefone, `${resposta}\n\n_Outra dúvida? Digite o número ou *0* para voltar._`);
+  if (!resposta) return enviarMensagem(telefone, `Opção inválida.\n\n${listarFAQs()}\n\n*0* para voltar.\n_Digite *sair* para encerrar_`);
+  return enviarMensagem(telefone, `${resposta}\n\n_Outra dúvida? Digite o número ou *0* para voltar._\n_Digite *sair* para encerrar_`);
 }
 
 module.exports = { processarMensagem };
