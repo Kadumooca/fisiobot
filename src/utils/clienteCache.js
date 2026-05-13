@@ -34,6 +34,46 @@ async function inicializarBanco() {
       atualizado_em TIMESTAMP DEFAULT NOW(),
       encerrado_em TIMESTAMP
     );
+
+    -- Migrações para tabelas existentes
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS tentativas_reativacao INTEGER DEFAULT 0;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultima_mensagem_em TIMESTAMP DEFAULT NOW();
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS agendou_em TIMESTAMP;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS etapa_encerramento TEXT;
+    ALTER TABLE conversas ADD COLUMN IF NOT EXISTS transferido_humano BOOLEAN DEFAULT FALSE;
+    ALTER TABLE conversas ADD COLUMN IF NOT EXISTS agendou BOOLEAN DEFAULT FALSE;
+    ALTER TABLE conversas ADD COLUMN IF NOT EXISTS encerrado_em TIMESTAMP;
+  `);
+}
+      telefone TEXT PRIMARY KEY,
+      dados JSONB,
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS leads (
+      id SERIAL PRIMARY KEY,
+      telefone TEXT,
+      nome TEXT,
+      especialidade TEXT,
+      status TEXT DEFAULT 'lead',
+      etapa_encerramento TEXT,
+      tentativas_reativacao INTEGER DEFAULT 0,
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      agendou_em TIMESTAMP,
+      ultima_mensagem_em TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS conversas (
+      id SERIAL PRIMARY KEY,
+      telefone TEXT,
+      etapa TEXT,
+      status TEXT DEFAULT 'ativa',
+      transferido_humano BOOLEAN DEFAULT FALSE,
+      agendou BOOLEAN DEFAULT FALSE,
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      encerrado_em TIMESTAMP
+    );
   `);
 }
 
