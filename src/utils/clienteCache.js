@@ -9,7 +9,9 @@ async function inicializarBanco() {
       dados JSONB,
       criado_em TIMESTAMP DEFAULT NOW(),
       atualizado_em TIMESTAMP DEFAULT NOW()
-    );
+    )
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS leads (
       id SERIAL PRIMARY KEY,
       telefone TEXT,
@@ -22,7 +24,9 @@ async function inicializarBanco() {
       atualizado_em TIMESTAMP DEFAULT NOW(),
       agendou_em TIMESTAMP,
       ultima_mensagem_em TIMESTAMP DEFAULT NOW()
-    );
+    )
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS conversas (
       id SERIAL PRIMARY KEY,
       telefone TEXT,
@@ -33,48 +37,15 @@ async function inicializarBanco() {
       criado_em TIMESTAMP DEFAULT NOW(),
       atualizado_em TIMESTAMP DEFAULT NOW(),
       encerrado_em TIMESTAMP
-    );
-
-    -- Migrações para tabelas existentes
-    ALTER TABLE leads ADD COLUMN IF NOT EXISTS tentativas_reativacao INTEGER DEFAULT 0;
-    ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultima_mensagem_em TIMESTAMP DEFAULT NOW();
-    ALTER TABLE leads ADD COLUMN IF NOT EXISTS agendou_em TIMESTAMP;
-    ALTER TABLE leads ADD COLUMN IF NOT EXISTS etapa_encerramento TEXT;
-    ALTER TABLE conversas ADD COLUMN IF NOT EXISTS transferido_humano BOOLEAN DEFAULT FALSE;
-    ALTER TABLE conversas ADD COLUMN IF NOT EXISTS agendou BOOLEAN DEFAULT FALSE;
-    ALTER TABLE conversas ADD COLUMN IF NOT EXISTS encerrado_em TIMESTAMP;
+    )
   `);
-}
-      telefone TEXT PRIMARY KEY,
-      dados JSONB,
-      criado_em TIMESTAMP DEFAULT NOW(),
-      atualizado_em TIMESTAMP DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS leads (
-      id SERIAL PRIMARY KEY,
-      telefone TEXT,
-      nome TEXT,
-      especialidade TEXT,
-      status TEXT DEFAULT 'lead',
-      etapa_encerramento TEXT,
-      tentativas_reativacao INTEGER DEFAULT 0,
-      criado_em TIMESTAMP DEFAULT NOW(),
-      atualizado_em TIMESTAMP DEFAULT NOW(),
-      agendou_em TIMESTAMP,
-      ultima_mensagem_em TIMESTAMP DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS conversas (
-      id SERIAL PRIMARY KEY,
-      telefone TEXT,
-      etapa TEXT,
-      status TEXT DEFAULT 'ativa',
-      transferido_humano BOOLEAN DEFAULT FALSE,
-      agendou BOOLEAN DEFAULT FALSE,
-      criado_em TIMESTAMP DEFAULT NOW(),
-      atualizado_em TIMESTAMP DEFAULT NOW(),
-      encerrado_em TIMESTAMP
-    );
-  `);
+  await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS tentativas_reativacao INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultima_mensagem_em TIMESTAMP DEFAULT NOW()`);
+  await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS agendou_em TIMESTAMP`);
+  await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS etapa_encerramento TEXT`);
+  await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS transferido_humano BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS agendou BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS encerrado_em TIMESTAMP`);
 }
 
 inicializarBanco().catch(console.error);
@@ -202,10 +173,8 @@ async function marcarRespondeuRemarketing(telefone) {
 
 async function buscarLeadsParaReativar() {
   try {
-    const agora = new Date();
     const resultado = [];
 
-    // 1ª tentativa — 2 horas sem resposta
     const r1 = await pool.query(`
       SELECT telefone, nome, especialidade, tentativas_reativacao
       FROM leads
@@ -216,7 +185,6 @@ async function buscarLeadsParaReativar() {
     `);
     r1.rows.forEach(r => resultado.push({ ...r, tentativa: 1 }));
 
-    // 2ª tentativa — 24 horas
     const r2 = await pool.query(`
       SELECT telefone, nome, especialidade, tentativas_reativacao
       FROM leads
@@ -227,7 +195,6 @@ async function buscarLeadsParaReativar() {
     `);
     r2.rows.forEach(r => resultado.push({ ...r, tentativa: 2 }));
 
-    // 3ª tentativa — 48 horas
     const r3 = await pool.query(`
       SELECT telefone, nome, especialidade, tentativas_reativacao
       FROM leads
