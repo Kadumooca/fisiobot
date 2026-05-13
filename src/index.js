@@ -13,34 +13,46 @@ const timeouts = new Map();
 
 function limparTimeouts(telefone) {
   if (timeouts.has(telefone)) {
-    const { t1, t2, t3 } = timeouts.get(telefone);
+    const { t1, t2, t3, th } = timeouts.get(telefone);
     if (t1) clearTimeout(t1);
     if (t2) clearTimeout(t2);
     if (t3) clearTimeout(t3);
+    if (th) clearTimeout(th);
     timeouts.delete(telefone);
   }
+}
+
+function agendarTimeoutHumano(telefone) {
+  limparTimeouts(telefone);
+  // Após 5 horas sem mensagem, libera o bot novamente
+  const th = setTimeout(async () => {
+    const s = getSessao(telefone);
+    if (s.etapa !== 'atendimento_humano') return;
+    setSessao(telefone, { etapa: 'encerrado' });
+  }, 5 * 60 * 60 * 1000);
+  timeouts.set(telefone, { th });
 }
 
 function agendarTimeoutsInatividade(telefone) {
   limparTimeouts(telefone);
   const sessao = getSessao(telefone);
-  if (sessao.etapa === 'encerrado' || sessao.etapa === 'menu') return;
+  if (sessao.etapa === 'encerrado' || sessao.etapa === 'menu' || sessao.etapa === 'atendimento_humano') return;
 
   const t1 = setTimeout(async () => {
     const s = getSessao(telefone);
-    if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
+    if (s.etapa === 'encerrado' || s.etapa === 'menu' || s.etapa === 'atendimento_humano') return;
     await enviarMensagem(telefone, `Olá! 😊 Ainda está por aí? Estou aqui caso queira continuar ou tirar alguma dúvida!`);
   }, 15 * 60 * 1000);
 
   const t2 = setTimeout(async () => {
     const s = getSessao(telefone);
-    if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
+    if (s.etapa === 'encerrado' || s.etapa === 'menu' || s.etapa === 'atendimento_humano') return;
     await enviarMensagem(telefone, `Oi novamente! 😊 Caso queira retomar nossa conversa ou agendar um horário na *Clínica Lituânia*, estou à disposição!`);
   }, 30 * 60 * 1000);
 
   const t3 = setTimeout(async () => {
     const s = getSessao(telefone);
-    if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
+    if (s.etapa === 'encerrado' || s.etapa === 'menu' || s.etapa === 'atendimento_humano') return;
     await enviarMensagem(telefone,
       `Tudo bem! 😊 Vou encerrar nosso atendimento por agora.\n\nQuando quiser retomar, é só nos enviar um *Olá* e terei prazer em te atender!`
     );
@@ -58,7 +70,7 @@ function agendarTimeoutsOferta(telefone) {
 
   const t1 = setTimeout(async () => {
     const s = getSessao(telefone);
-    if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
+    if (s.etapa === 'encerrado' || s.etapa === 'menu' || s.etapa === 'atendimento_humano') return;
     await enviarMensagem(telefone,
       `Oi! 😊 Ainda está pensando se gostaria de agendar?\n\nEstou aqui para te ajudar a dar esse primeiro passo no seu tratamento!`
     );
@@ -66,7 +78,7 @@ function agendarTimeoutsOferta(telefone) {
 
   const t2 = setTimeout(async () => {
     const s = getSessao(telefone);
-    if (s.etapa === 'encerrado' || s.etapa === 'menu') return;
+    if (s.etapa === 'encerrado' || s.etapa === 'menu' || s.etapa === 'atendimento_humano') return;
     await enviarMensagem(telefone,
       `Tudo bem! 😊 Vou encerrar nosso atendimento por agora.\n\nQuando quiser retomar, é só nos enviar um *Olá* e terei prazer em te atender!`
     );
@@ -119,12 +131,20 @@ app.post('/webhook', async (req, res) => {
     const mensagem = body.data?.message?.conversation ||
                      body.data?.message?.extendedTextMessage?.text;
 
+    const sessaoAtual = getSessao(telefone);
+
+    // Atendimento humano ativo — ignora tudo e renova o timer de 5h
+    if (sessaoAtual.etapa === 'atendimento_humano') {
+      agendarTimeoutHumano(telefone);
+      return res.sendStatus(200);
+    }
+
     // Detecta mídia enviada (áudio, vídeo, foto)
     if (detectarMidia(body)) {
-      const sessaoAtual = getSessao(telefone);
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
       limparTimeouts(telefone);
-      setSessao(telefone, { etapa: 'encerrado' });
+      setSessao(telefone, { etapa: 'atendimento_humano' });
+      agendarTimeoutHumano(telefone);
       await enviarMensagem(telefone,
         `😊 Recebi sua mídia! A partir deste momento um de nossos atendentes irá dar continuidade à conversa.\n\nPor favor, aguarde — em breve retornaremos! 🙏`
       );
@@ -133,7 +153,6 @@ app.post('/webhook', async (req, res) => {
 
     // Detecta pergunta sobre envio de mídia no texto
     if (detectarPerguntaSobreAudio(mensagem)) {
-      const sessaoAtual = getSessao(telefone);
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
       await enviarMensagem(telefone,
         `😊 Sou um assistente virtual e trabalho apenas com mensagens de texto. Escreva o que precisa e terei prazer em te ajudar!`
@@ -148,10 +167,14 @@ app.post('/webhook', async (req, res) => {
     limparTimeouts(telefone);
     await processarMensagem(telefone, mensagem);
 
-    const sessaoAtual = getSessao(telefone);
-    if (sessaoAtual.etapa === 'aguardando_resposta_agendamento') {
+    const sessaoDepois = getSessao(telefone);
+
+    // Se passou para atendimento humano, agenda timer de 5h
+    if (sessaoDepois.etapa === 'atendimento_humano') {
+      agendarTimeoutHumano(telefone);
+    } else if (sessaoDepois.etapa === 'aguardando_resposta_agendamento') {
       agendarTimeoutsOferta(telefone);
-    } else if (sessaoAtual.etapa !== 'encerrado' && sessaoAtual.etapa !== 'menu') {
+    } else if (sessaoDepois.etapa !== 'encerrado' && sessaoDepois.etapa !== 'menu') {
       agendarTimeoutsInatividade(telefone);
     }
 
