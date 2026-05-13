@@ -29,7 +29,7 @@ function agendarTimeoutHumano(telefone) {
     const s = getSessao(telefone);
     if (s.etapa !== 'atendimento_humano') return;
     setSessao(telefone, { etapa: 'encerrado' });
-  }, 5 * 60 * 60 * 1000);
+  }, 1 * 60 * 60 * 1000);
   timeouts.set(telefone, { th });
 }
 
