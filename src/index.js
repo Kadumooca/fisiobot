@@ -9,8 +9,6 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const MSG_APENAS_TEXTO = `😊 Olá! Sou um assistente virtual e trabalho apenas com mensagens de texto. Áudios, fotos e vídeos não consigo processar ainda. Escreva o que precisa e terei prazer em te ajudar!`;
-
 const timeouts = new Map();
 
 function limparTimeouts(telefone) {
@@ -79,7 +77,7 @@ function agendarTimeoutsOferta(telefone) {
   timeouts.set(telefone, { t1, t2 });
 }
 
-function detectarMidiaOuPerguntaSobreAudio(body, mensagem) {
+function detectarMidia(body) {
   const msg = body.data?.message;
   if (
     msg?.audioMessage ||
@@ -90,23 +88,24 @@ function detectarMidiaOuPerguntaSobreAudio(body, mensagem) {
     msg?.voiceMessage ||
     msg?.pttMessage
   ) return true;
-
-  if (mensagem) {
-    const textoLower = mensagem.toLowerCase();
-    const palavrasAudio = [
-      'posso mandar audio', 'posso enviar audio', 'aceita audio',
-      'posso mandar áudio', 'posso enviar áudio', 'aceita áudio',
-      'posso mandar voz', 'posso enviar voz', 'aceita voz',
-      'posso mandar foto', 'posso enviar foto', 'aceita foto',
-      'posso mandar video', 'posso enviar video', 'aceita video',
-      'posso mandar vídeo', 'posso enviar vídeo', 'aceita vídeo',
-      'posso gravar', 'mensagem de voz', 'por voz', 'gravação de voz',
-      'aceita imagem', 'posso mandar imagem', 'posso enviar imagem',
-      'manda foto', 'manda audio', 'manda áudio', 'manda vídeo', 'manda video'
-    ];
-    if (palavrasAudio.some(p => textoLower.includes(p))) return true;
-  }
   return false;
+}
+
+function detectarPerguntaSobreAudio(mensagem) {
+  if (!mensagem) return false;
+  const textoLower = mensagem.toLowerCase();
+  const palavras = [
+    'posso mandar audio', 'posso enviar audio', 'aceita audio',
+    'posso mandar áudio', 'posso enviar áudio', 'aceita áudio',
+    'posso mandar voz', 'posso enviar voz', 'aceita voz',
+    'posso mandar foto', 'posso enviar foto', 'aceita foto',
+    'posso mandar video', 'posso enviar video', 'aceita video',
+    'posso mandar vídeo', 'posso enviar vídeo', 'aceita vídeo',
+    'posso gravar', 'mensagem de voz', 'por voz', 'gravação de voz',
+    'aceita imagem', 'posso mandar imagem', 'posso enviar imagem',
+    'manda foto', 'manda audio', 'manda áudio', 'manda vídeo', 'manda video'
+  ];
+  return palavras.some(p => textoLower.includes(p));
 }
 
 app.post('/webhook', async (req, res) => {
@@ -120,10 +119,25 @@ app.post('/webhook', async (req, res) => {
     const mensagem = body.data?.message?.conversation ||
                      body.data?.message?.extendedTextMessage?.text;
 
-    if (detectarMidiaOuPerguntaSobreAudio(body, mensagem)) {
+    // Detecta mídia enviada (áudio, vídeo, foto)
+    if (detectarMidia(body)) {
       const sessaoAtual = getSessao(telefone);
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
-      await enviarMensagem(telefone, MSG_APENAS_TEXTO);
+      limparTimeouts(telefone);
+      setSessao(telefone, { etapa: 'encerrado' });
+      await enviarMensagem(telefone,
+        `😊 Recebi sua mídia! A partir deste momento um de nossos atendentes irá dar continuidade à conversa.\n\nPor favor, aguarde — em breve retornaremos! 🙏`
+      );
+      return res.sendStatus(200);
+    }
+
+    // Detecta pergunta sobre envio de mídia no texto
+    if (detectarPerguntaSobreAudio(mensagem)) {
+      const sessaoAtual = getSessao(telefone);
+      if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
+      await enviarMensagem(telefone,
+        `😊 Sou um assistente virtual e trabalho apenas com mensagens de texto. Escreva o que precisa e terei prazer em te ajudar!`
+      );
       return res.sendStatus(200);
     }
 
