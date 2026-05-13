@@ -286,8 +286,8 @@ async function handleMenu(telefone, texto) {
     case '6':
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, atendente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
-    case '7':
-      setSessao(telefone, { etapa: 'encerrado' });
+   case '7':
+      setSessao(telefone, { etapa: 'atendimento_humano' });
       return enviarMensagem(telefone,
         `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`
       );
