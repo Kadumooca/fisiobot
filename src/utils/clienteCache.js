@@ -1,114 +1,283 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-async function inicializarTabela() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS clientes_cache (
-        telefone VARCHAR(20) PRIMARY KEY,
-        cliente_id INTEGER,
-        nome VARCHAR(255),
-        criado_em TIMESTAMP DEFAULT NOW(),
-        atualizado_em TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS leads (
-        id SERIAL PRIMARY KEY,
-        telefone VARCHAR(20) NOT NULL,
-        nome VARCHAR(255),
-        especialidade VARCHAR(100),
-        agendou BOOLEAN DEFAULT FALSE,
-        data_contato TIMESTAMP DEFAULT NOW(),
-        tentativas_remarketing INTEGER DEFAULT 0,
-        ultima_tentativa TIMESTAMP,
-        respondeu_remarketing BOOLEAN DEFAULT FALSE,
-        motivo_nao_agendou TEXT,
-        ativo BOOLEAN DEFAULT TRUE
-      )
-    `);
-    console.log('Tabelas prontas!');
-  } catch (err) {
-    console.error('Erro ao criar tabelas:', err.message);
-  }
+async function inicializarBanco() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS clientes_cache (
+      telefone TEXT PRIMARY KEY,
+      dados JSONB,
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS leads (
+      id SERIAL PRIMARY KEY,
+      telefone TEXT,
+      nome TEXT,
+      especialidade TEXT,
+      status TEXT DEFAULT 'lead',
+      etapa_encerramento TEXT,
+      tentativas_reativacao INTEGER DEFAULT 0,
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      agendou_em TIMESTAMP,
+      ultima_mensagem_em TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS conversas (
+      id SERIAL PRIMARY KEY,
+      telefone TEXT,
+      etapa TEXT,
+      status TEXT DEFAULT 'ativa',
+      transferido_humano BOOLEAN DEFAULT FALSE,
+      agendou BOOLEAN DEFAULT FALSE,
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      encerrado_em TIMESTAMP
+    );
+  `);
 }
+
+inicializarBanco().catch(console.error);
 
 async function buscarClientePorTelefone(telefone) {
   try {
-    const result = await pool.query(
-      'SELECT cliente_id, nome FROM clientes_cache WHERE telefone = $1', [telefone]
-    );
-    if (result.rows.length === 0) return null;
-    return { Id: result.rows[0].cliente_id, Nome: result.rows[0].nome };
-  } catch (err) { console.error('Erro ao buscar cliente:', err.message); return null; }
+    const res = await pool.query('SELECT dados FROM clientes_cache WHERE telefone = $1', [telefone]);
+    return res.rows[0]?.dados || null;
+  } catch (err) {
+    console.error('Erro buscarClientePorTelefone:', err.message);
+    return null;
+  }
 }
 
-async function salvarClientePorTelefone(telefone, cliente) {
+async function salvarClientePorTelefone(telefone, dados) {
   try {
-    await pool.query(`
-      INSERT INTO clientes_cache (telefone, cliente_id, nome, atualizado_em)
-      VALUES ($1, $2, $3, NOW())
-      ON CONFLICT (telefone) DO UPDATE SET cliente_id = $2, nome = $3, atualizado_em = NOW()
-    `, [telefone, cliente.Id, cliente.Nome]);
-  } catch (err) { console.error('Erro ao salvar cliente:', err.message); }
+    await pool.query(
+      `INSERT INTO clientes_cache (telefone, dados, atualizado_em)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (telefone) DO UPDATE SET dados = $2, atualizado_em = NOW()`,
+      [telefone, JSON.stringify(dados)]
+    );
+  } catch (err) {
+    console.error('Erro salvarClientePorTelefone:', err.message);
+  }
 }
 
 async function registrarLead(telefone, nome, especialidade) {
   try {
-    await pool.query(`
-      INSERT INTO leads (telefone, nome, especialidade, data_contato)
-      VALUES ($1, $2, $3, NOW()) ON CONFLICT DO NOTHING
-    `, [telefone, nome, especialidade]);
-  } catch (err) { console.error('Erro ao registrar lead:', err.message); }
+    const existe = await pool.query('SELECT id FROM leads WHERE telefone = $1', [telefone]);
+    if (existe.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO leads (telefone, nome, especialidade, status, ultima_mensagem_em)
+         VALUES ($1, $2, $3, 'lead', NOW())`,
+        [telefone, nome || 'Desconhecido', especialidade]
+      );
+    } else {
+      await pool.query(
+        `UPDATE leads SET especialidade = $2, atualizado_em = NOW(), ultima_mensagem_em = NOW()
+         WHERE telefone = $1`,
+        [telefone, especialidade]
+      );
+    }
+    await registrarConversa(telefone);
+  } catch (err) {
+    console.error('Erro registrarLead:', err.message);
+  }
+}
+
+async function registrarConversa(telefone) {
+  try {
+    const existe = await pool.query(
+      `SELECT id FROM conversas WHERE telefone = $1 AND status = 'ativa'`, [telefone]
+    );
+    if (existe.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO conversas (telefone, status) VALUES ($1, 'ativa')`, [telefone]
+      );
+    }
+  } catch (err) {
+    console.error('Erro registrarConversa:', err.message);
+  }
 }
 
 async function marcarAgendou(telefone) {
   try {
     await pool.query(
-      `UPDATE leads SET agendou = TRUE, ativo = FALSE WHERE telefone = $1 AND agendou = FALSE`,
+      `UPDATE leads SET status = 'agendou', agendou_em = NOW(), atualizado_em = NOW()
+       WHERE telefone = $1`,
       [telefone]
     );
-  } catch (err) { console.error('Erro ao marcar agendou:', err.message); }
+    await pool.query(
+      `UPDATE conversas SET agendou = TRUE, status = 'encerrada', encerrado_em = NOW(), atualizado_em = NOW()
+       WHERE telefone = $1 AND status = 'ativa'`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro marcarAgendou:', err.message);
+  }
 }
 
-async function buscarLeadsParaRemarketing() {
+async function marcarTransferidoHumano(telefone) {
   try {
-    const result = await pool.query(`
-      SELECT * FROM leads WHERE agendou = FALSE AND ativo = TRUE
-      AND tentativas_remarketing < 2 AND data_contato < NOW() - INTERVAL '1 day'
-      AND (ultima_tentativa IS NULL OR ultima_tentativa < NOW() - INTERVAL '1 day')
-      AND respondeu_remarketing = FALSE
-    `);
-    return result.rows;
-  } catch (err) { console.error('Erro ao buscar leads:', err.message); return []; }
+    await pool.query(
+      `UPDATE conversas SET transferido_humano = TRUE, status = 'humano', atualizado_em = NOW()
+       WHERE telefone = $1 AND status = 'ativa'`,
+      [telefone]
+    );
+    await pool.query(
+      `UPDATE leads SET status = 'humano', atualizado_em = NOW() WHERE telefone = $1`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro marcarTransferidoHumano:', err.message);
+  }
 }
 
-async function atualizarTentativaRemarketing(telefone) {
+async function marcarEncerrado(telefone) {
   try {
-    await pool.query(`
-      UPDATE leads SET tentativas_remarketing = tentativas_remarketing + 1,
-      ultima_tentativa = NOW() WHERE telefone = $1
-    `, [telefone]);
-  } catch (err) { console.error('Erro ao atualizar tentativa:', err.message); }
+    await pool.query(
+      `UPDATE conversas SET status = 'encerrada', encerrado_em = NOW(), atualizado_em = NOW()
+       WHERE telefone = $1 AND status = 'ativa'`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro marcarEncerrado:', err.message);
+  }
 }
 
 async function marcarRespondeuRemarketing(telefone) {
   try {
     await pool.query(
-      `UPDATE leads SET respondeu_remarketing = TRUE WHERE telefone = $1`,
+      `UPDATE leads SET status = 'respondeu', tentativas_reativacao = 0, ultima_mensagem_em = NOW(), atualizado_em = NOW()
+       WHERE telefone = $1 AND status = 'remarketing'`,
       [telefone]
     );
-  } catch (err) { console.error('Erro ao marcar respondeu:', err.message); }
+    await pool.query(
+      `UPDATE leads SET ultima_mensagem_em = NOW() WHERE telefone = $1`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro marcarRespondeuRemarketing:', err.message);
+  }
 }
 
-inicializarTabela();
+async function buscarLeadsParaReativar() {
+  try {
+    const agora = new Date();
+    const resultado = [];
+
+    // 1ª tentativa — 2 horas sem resposta
+    const r1 = await pool.query(`
+      SELECT telefone, nome, especialidade, tentativas_reativacao
+      FROM leads
+      WHERE status IN ('lead', 'respondeu')
+      AND tentativas_reativacao = 0
+      AND ultima_mensagem_em < NOW() - INTERVAL '2 hours'
+      AND ultima_mensagem_em > NOW() - INTERVAL '3 hours'
+    `);
+    r1.rows.forEach(r => resultado.push({ ...r, tentativa: 1 }));
+
+    // 2ª tentativa — 24 horas
+    const r2 = await pool.query(`
+      SELECT telefone, nome, especialidade, tentativas_reativacao
+      FROM leads
+      WHERE status IN ('lead', 'respondeu')
+      AND tentativas_reativacao = 1
+      AND ultima_mensagem_em < NOW() - INTERVAL '24 hours'
+      AND ultima_mensagem_em > NOW() - INTERVAL '25 hours'
+    `);
+    r2.rows.forEach(r => resultado.push({ ...r, tentativa: 2 }));
+
+    // 3ª tentativa — 48 horas
+    const r3 = await pool.query(`
+      SELECT telefone, nome, especialidade, tentativas_reativacao
+      FROM leads
+      WHERE status IN ('lead', 'respondeu')
+      AND tentativas_reativacao = 2
+      AND ultima_mensagem_em < NOW() - INTERVAL '48 hours'
+      AND ultima_mensagem_em > NOW() - INTERVAL '49 hours'
+    `);
+    r3.rows.forEach(r => resultado.push({ ...r, tentativa: 3 }));
+
+    return resultado;
+  } catch (err) {
+    console.error('Erro buscarLeadsParaReativar:', err.message);
+    return [];
+  }
+}
+
+async function incrementarTentativaReativacao(telefone) {
+  try {
+    await pool.query(
+      `UPDATE leads SET tentativas_reativacao = tentativas_reativacao + 1, atualizado_em = NOW()
+       WHERE telefone = $1`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro incrementarTentativaReativacao:', err.message);
+  }
+}
+
+async function buscarEstatisticas() {
+  try {
+    const total = await pool.query(`SELECT COUNT(*) FROM conversas WHERE criado_em > NOW() - INTERVAL '30 days'`);
+    const ativas = await pool.query(`SELECT COUNT(*) FROM conversas WHERE status = 'ativa'`);
+    const agendamentos = await pool.query(`SELECT COUNT(*) FROM conversas WHERE agendou = TRUE AND criado_em > NOW() - INTERVAL '30 days'`);
+    const humanos = await pool.query(`SELECT COUNT(*) FROM conversas WHERE transferido_humano = TRUE AND criado_em > NOW() - INTERVAL '30 days'`);
+    const leads = await pool.query(`SELECT COUNT(*) FROM leads WHERE status = 'lead' AND criado_em > NOW() - INTERVAL '30 days'`);
+    const naoRespondidos = await pool.query(`
+      SELECT COUNT(*) FROM leads
+      WHERE status IN ('lead', 'respondeu')
+      AND ultima_mensagem_em < NOW() - INTERVAL '2 hours'
+    `);
+    const porDia = await pool.query(`
+      SELECT DATE(criado_em) as dia, COUNT(*) as total
+      FROM conversas
+      WHERE criado_em > NOW() - INTERVAL '7 days'
+      GROUP BY DATE(criado_em)
+      ORDER BY dia ASC
+    `);
+    const porEspecialidade = await pool.query(`
+      SELECT especialidade, COUNT(*) as total
+      FROM leads
+      WHERE criado_em > NOW() - INTERVAL '30 days'
+      GROUP BY especialidade
+      ORDER BY total DESC
+    `);
+    const leadsNaoConvertidos = await pool.query(`
+      SELECT telefone, nome, especialidade, ultima_mensagem_em, tentativas_reativacao
+      FROM leads
+      WHERE status IN ('lead', 'respondeu')
+      AND ultima_mensagem_em < NOW() - INTERVAL '1 hour'
+      ORDER BY ultima_mensagem_em DESC
+      LIMIT 20
+    `);
+
+    return {
+      total: parseInt(total.rows[0].count),
+      ativas: parseInt(ativas.rows[0].count),
+      agendamentos: parseInt(agendamentos.rows[0].count),
+      humanos: parseInt(humanos.rows[0].count),
+      leads: parseInt(leads.rows[0].count),
+      naoRespondidos: parseInt(naoRespondidos.rows[0].count),
+      porDia: porDia.rows,
+      porEspecialidade: porEspecialidade.rows,
+      leadsNaoConvertidos: leadsNaoConvertidos.rows,
+    };
+  } catch (err) {
+    console.error('Erro buscarEstatisticas:', err.message);
+    return null;
+  }
+}
 
 module.exports = {
-  buscarClientePorTelefone, salvarClientePorTelefone, registrarLead,
-  marcarAgendou, buscarLeadsParaRemarketing, atualizarTentativaRemarketing,
+  buscarClientePorTelefone,
+  salvarClientePorTelefone,
+  registrarLead,
+  marcarAgendou,
+  marcarTransferidoHumano,
+  marcarEncerrado,
   marcarRespondeuRemarketing,
+  buscarLeadsParaReativar,
+  incrementarTentativaReativacao,
+  buscarEstatisticas,
 };
