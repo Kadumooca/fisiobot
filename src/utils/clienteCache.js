@@ -44,11 +44,15 @@ async function inicializarBanco() {
   await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS agendou_em TIMESTAMP`);
   await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS etapa_encerramento TEXT`);
   await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'lead'`);
+  await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW()`);
+  await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT NOW()`);
   await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativa'`);
   await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS transferido_humano BOOLEAN DEFAULT FALSE`);
   await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS agendou BOOLEAN DEFAULT FALSE`);
   await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS encerrado_em TIMESTAMP`);
   await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS etapa TEXT`);
+  await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW()`);
+  await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT NOW()`);
 }
 
 inicializarBanco().catch(console.error);
@@ -157,6 +161,7 @@ async function marcarEncerrado(telefone) {
     console.error('Erro marcarEncerrado:', err.message);
   }
 }
+
 async function marcarNaoReativar(telefone) {
   try {
     await pool.query(
@@ -168,6 +173,7 @@ async function marcarNaoReativar(telefone) {
     console.error('Erro marcarNaoReativar:', err.message);
   }
 }
+
 async function marcarRespondeuRemarketing(telefone) {
   try {
     await pool.query(
@@ -192,6 +198,7 @@ async function buscarLeadsParaReativar() {
       SELECT telefone, nome, especialidade, tentativas_reativacao
       FROM leads
       WHERE status IN ('lead', 'respondeu')
+      AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 0
       AND ultima_mensagem_em < NOW() - INTERVAL '2 hours'
       AND ultima_mensagem_em > NOW() - INTERVAL '3 hours'
@@ -202,6 +209,7 @@ async function buscarLeadsParaReativar() {
       SELECT telefone, nome, especialidade, tentativas_reativacao
       FROM leads
       WHERE status IN ('lead', 'respondeu')
+      AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 1
       AND ultima_mensagem_em < NOW() - INTERVAL '24 hours'
       AND ultima_mensagem_em > NOW() - INTERVAL '25 hours'
@@ -212,6 +220,7 @@ async function buscarLeadsParaReativar() {
       SELECT telefone, nome, especialidade, tentativas_reativacao
       FROM leads
       WHERE status IN ('lead', 'respondeu')
+      AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 2
       AND ultima_mensagem_em < NOW() - INTERVAL '48 hours'
       AND ultima_mensagem_em > NOW() - INTERVAL '49 hours'
@@ -290,14 +299,13 @@ async function buscarEstatisticas() {
 }
 
 module.exports = {
-  module.exports = {
   buscarClientePorTelefone,
-  marcarNaoReativar,
   salvarClientePorTelefone,
   registrarLead,
   marcarAgendou,
   marcarTransferidoHumano,
   marcarEncerrado,
+  marcarNaoReativar,
   marcarRespondeuRemarketing,
   buscarLeadsParaReativar,
   incrementarTentativaReativacao,
