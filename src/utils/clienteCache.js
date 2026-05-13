@@ -157,7 +157,17 @@ async function marcarEncerrado(telefone) {
     console.error('Erro marcarEncerrado:', err.message);
   }
 }
-
+async function marcarNaoReativar(telefone) {
+  try {
+    await pool.query(
+      `UPDATE leads SET status = 'nao_reativar', atualizado_em = NOW()
+       WHERE telefone = $1`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro marcarNaoReativar:', err.message);
+  }
+}
 async function marcarRespondeuRemarketing(telefone) {
   try {
     await pool.query(
@@ -280,7 +290,9 @@ async function buscarEstatisticas() {
 }
 
 module.exports = {
+  module.exports = {
   buscarClientePorTelefone,
+  marcarNaoReativar,
   salvarClientePorTelefone,
   registrarLead,
   marcarAgendou,
