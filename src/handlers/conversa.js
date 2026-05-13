@@ -4,7 +4,7 @@ const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
 const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
-const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, marcarAgendou, marcarRespondeuRemarketing } = require('../utils/clienteCache');
+const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, marcarAgendou, marcarRespondeuRemarketing, marcarNaoReativar } = require('../utils/clienteCache');
 
 const WHATSAPP_RECEPCAO = 'https://wa.me/5511987281427';
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n💬 WhatsApp: wa.me/5511987281427\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
@@ -45,6 +45,16 @@ _ou digite *sair* para encerrar_`;
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_SITE = ['olá, gostaria de mais informações', 'ola, gostaria de mais informacoes', 'gostaria de mais informações', 'gostaria de mais informacoes'];
 const PALAVRAS_AGRADECIMENTO = ['obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks', 'agradeço', 'agradeco', 'grato', 'grata', 'muito obrigado', 'muito obrigada'];
+const FRASES_NAO_REATIVAR = [
+  'vou cancelar', 'preciso cancelar', 'quero cancelar', 'vou desmarcar',
+  'preciso desmarcar', 'não posso ir', 'nao posso ir', 'não vou poder',
+  'nao vou poder', 'vou remarcar', 'preciso remarcar', 'vou ligar depois',
+  'ligo depois', 'entro em contato', 'quando puder eu ligo', 'depois eu volto',
+  'depois eu chamo', 'vou pensar', 'deixa eu pensar', 'não preciso mais',
+  'nao preciso mais', 'desisti', 'por enquanto não', 'por enquanto nao',
+  'não quero mais', 'nao quero mais', 'outro momento', 'outra hora',
+  'não tenho interesse', 'nao tenho interesse'
+];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const AGENDAS_POR_ESPECIALIDADE = {
@@ -90,7 +100,7 @@ const AGENDAS_POR_ESPECIALIDADE = {
     ]
   },
   '7': {
-    nome: 'Drenagem / Massagem Relaxante / Liberação Miofascial',
+    nome: 'Drenagem / Massagem Relaxante',
     periodos: [
       { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
     ]
@@ -174,6 +184,12 @@ async function processarMensagem(telefone, mensagem) {
   const textoLower = texto.toLowerCase();
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
+
+  // Detecta intenção de cancelamento/adiamento — não reativar
+  if (FRASES_NAO_REATIVAR.some(f => textoLower.includes(f))) {
+    await marcarNaoReativar(telefone);
+    console.log(`Lead ${telefone} marcado como nao_reativar`);
+  }
 
   if (sessao.etapa === 'encerrado') {
     const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
@@ -286,7 +302,7 @@ async function handleMenu(telefone, texto) {
     case '6':
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, atendente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
-   case '7':
+    case '7':
       setSessao(telefone, { etapa: 'atendimento_humano' });
       return enviarMensagem(telefone,
         `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`
