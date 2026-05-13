@@ -14,7 +14,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/dashboard', dashboardRouter);
 
 const timeouts = new Map();
-// Rastreia se a última mensagem foi nossa (fromMe)
 const ultimaMensagemNossa = new Map();
 
 function limparTimeouts(telefone) {
@@ -117,13 +116,16 @@ function detectarPerguntaSobreAudio(mensagem) {
   return palavras.some(p => textoLower.includes(p));
 }
 
+const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
+const TRINTA_MINUTOS = 30 * 60 * 1000;
+
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
     const telefone = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
 
-    // Mensagem enviada por nós — registra e ignora
+    // Mensagem enviada por nós — registra timestamp e ignora
     if (body.data?.key?.fromMe) {
       ultimaMensagemNossa.set(telefone, Date.now());
       return res.sendStatus(200);
@@ -133,15 +135,27 @@ app.post('/webhook', async (req, res) => {
                      body.data?.message?.extendedTextMessage?.text;
 
     const sessaoAtual = getSessao(telefone);
-
-    // Verifica se a última mensagem foi nossa (nos últimos 30 min)
     const tempoUltimaNossa = ultimaMensagemNossa.get(telefone);
-    const foiNosQueFalamos = tempoUltimaNossa && (Date.now() - tempoUltimaNossa) < 30 * 60 * 1000;
+    const tempoDesdeNossa = tempoUltimaNossa ? (Date.now() - tempoUltimaNossa) : Infinity;
+    const dentroJanela30min = tempoDesdeNossa < TRINTA_MINUTOS;
+    const foraJanela30min = tempoDesdeNossa >= TRINTA_MINUTOS;
+    const textoLower = (mensagem || '').toLowerCase().trim();
+    const ePalavraAtivacao = PALAVRAS_REATIVACAO.some(p => textoLower === p);
 
-    // Se foi nós que falamos e o bot está encerrado — ignora completamente e marca não reativar
-    if (foiNosQueFalamos && sessaoAtual.etapa === 'encerrado') {
-      await marcarNaoReativar(telefone);
-      return res.sendStatus(200);
+    // Clínica iniciou conversa e bot está encerrado
+    if (sessaoAtual.etapa === 'encerrado' && tempoUltimaNossa) {
+      if (dentroJanela30min) {
+        // Dentro de 30min — ignora silenciosamente (continuação da conversa)
+        return res.sendStatus(200);
+      }
+      if (foraJanela30min && ePalavraAtivacao) {
+        // Após 30min com palavra de ativação — reativa normalmente
+        ultimaMensagemNossa.delete(telefone);
+        // Continua processamento normal abaixo
+      } else if (foraJanela30min && !ePalavraAtivacao) {
+        // Após 30min mas sem palavra de ativação — ignora silenciosamente
+        return res.sendStatus(200);
+      }
     }
 
     // Atendimento humano ativo — ignora tudo e renova timer
