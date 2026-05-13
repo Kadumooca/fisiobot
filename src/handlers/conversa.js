@@ -210,12 +210,16 @@ async function processarMensagem(telefone, mensagem) {
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, atendente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
     }
-    return enviarMensagem(telefone, BOAS_VINDAS);
+    // Qualquer outra coisa — encerra silenciosamente e não reativa
+    await marcarNaoReativar(telefone);
+    setSessao(telefone, { etapa: 'encerrado' });
+    return;
   }
 
   if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
-    const etapasAtivas = ['conversando_com_lissa', 'aguardando_resposta_agendamento'];
+    const etapasAtivas = ['conversando_com_lissa', 'aguardando_resposta_agendamento', 'aguardando_escolha_menu', 'menu'];
     if (etapasAtivas.includes(sessao.etapa)) {
+      await marcarNaoReativar(telefone);
       setSessao(telefone, { etapa: 'encerrado' });
       return enviarMensagem(telefone, `De nada! 😊 Foi um prazer te atender.\n\nEsperamos te ver em breve na *Clínica Lituânia*!\n\nQuando precisar, é só nos enviar um *Olá*. 👋`);
     }
@@ -308,6 +312,8 @@ async function handleMenu(telefone, texto) {
         `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`
       );
     default:
+      // Qualquer coisa fora do menu — encerra silenciosamente
+      await marcarNaoReativar(telefone);
       setSessao(telefone, { etapa: 'encerrado' });
       return;
   }
@@ -363,6 +369,7 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
   ];
 
   if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
+    await marcarNaoReativar(telefone);
     setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `De nada! 😊 Foi um prazer te atender.\n\nEsperamos te ver em breve na *Clínica Lituânia*!\n\nQuando precisar, é só nos enviar um *Olá*. 👋`);
   }
@@ -384,6 +391,7 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
 
   if (temNao && !temSim) {
     if (sessao.contextoPilates || contextoPilatesAtivo(sessao)) {
+      await marcarNaoReativar(telefone);
       setSessao(telefone, { etapa: 'encerrado' });
       return enviarMensagem(telefone,
         `Tudo bem, sem problemas! 😊\n\nFoi um prazer conversar com você. Quando quiser conhecer o Pilates ou qualquer outro serviço da *Clínica Lituânia*, é só nos enviar um *Olá*! 👋`
