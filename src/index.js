@@ -5,6 +5,7 @@ const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
 const { enviarMensagem } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
+const { marcarNaoReativar } = require('./utils/clienteCache');
 const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
@@ -13,6 +14,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/dashboard', dashboardRouter);
 
 const timeouts = new Map();
+// Rastreia se a última mensagem foi nossa (fromMe)
+const ultimaMensagemNossa = new Map();
 
 function limparTimeouts(telefone) {
   if (timeouts.has(telefone)) {
@@ -117,21 +120,37 @@ function detectarPerguntaSobreAudio(mensagem) {
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
-    if (body.data?.key?.fromMe) return res.sendStatus(200);
-
     const telefone = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
+
+    // Mensagem enviada por nós — registra e ignora
+    if (body.data?.key?.fromMe) {
+      ultimaMensagemNossa.set(telefone, Date.now());
+      return res.sendStatus(200);
+    }
 
     const mensagem = body.data?.message?.conversation ||
                      body.data?.message?.extendedTextMessage?.text;
 
     const sessaoAtual = getSessao(telefone);
 
+    // Verifica se a última mensagem foi nossa (nos últimos 30 min)
+    const tempoUltimaNossa = ultimaMensagemNossa.get(telefone);
+    const foiNosQueFalamos = tempoUltimaNossa && (Date.now() - tempoUltimaNossa) < 30 * 60 * 1000;
+
+    // Se foi nós que falamos e o bot está encerrado — ignora completamente e marca não reativar
+    if (foiNosQueFalamos && sessaoAtual.etapa === 'encerrado') {
+      await marcarNaoReativar(telefone);
+      return res.sendStatus(200);
+    }
+
+    // Atendimento humano ativo — ignora tudo e renova timer
     if (sessaoAtual.etapa === 'atendimento_humano') {
       agendarTimeoutHumano(telefone);
       return res.sendStatus(200);
     }
 
+    // Detecta mídia enviada
     if (detectarMidia(body)) {
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
       limparTimeouts(telefone);
@@ -143,6 +162,7 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // Detecta pergunta sobre mídia no texto
     if (detectarPerguntaSobreAudio(mensagem)) {
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
       await enviarMensagem(telefone,
@@ -182,11 +202,13 @@ app.get('/setup-db', async (req, res) => {
     await pool.query(`CREATE TABLE IF NOT EXISTS clientes_cache (telefone TEXT PRIMARY KEY, dados JSONB, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, telefone TEXT, nome TEXT, especialidade TEXT, status TEXT DEFAULT 'lead', etapa_encerramento TEXT, tentativas_reativacao INTEGER DEFAULT 0, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), agendou_em TIMESTAMP, ultima_mensagem_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS conversas (id SERIAL PRIMARY KEY, telefone TEXT, etapa TEXT, status TEXT DEFAULT 'ativa', transferido_humano BOOLEAN DEFAULT FALSE, agendou BOOLEAN DEFAULT FALSE, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), encerrado_em TIMESTAMP)`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'lead'`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS tentativas_reativacao INTEGER DEFAULT 0`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultima_mensagem_em TIMESTAMP DEFAULT NOW()`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS agendou_em TIMESTAMP`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS etapa_encerramento TEXT`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'lead'`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW()`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT NOW()`);
     await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativa'`);
     await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS transferido_humano BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS agendou BOOLEAN DEFAULT FALSE`);
@@ -194,8 +216,6 @@ app.get('/setup-db', async (req, res) => {
     await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS etapa TEXT`);
     await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW()`);
     await pool.query(`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT NOW()`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW()`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP DEFAULT NOW()`);
     res.json({ ok: true, mensagem: 'Banco configurado com sucesso!' });
   } catch (err) {
     res.json({ ok: false, erro: err.message });
@@ -204,13 +224,11 @@ app.get('/setup-db', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// Remarketing a cada 30 min
 setInterval(async () => {
   try { await executarRemarketing(); }
   catch (err) { console.error('Erro remarketing:', err); }
 }, 30 * 60 * 1000);
 
-// Resumo diário às 20h
 function agendarResumoDiario() {
   const agora = new Date();
   const alvo = new Date();
