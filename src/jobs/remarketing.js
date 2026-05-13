@@ -1,5 +1,5 @@
 const { enviarMensagem } = require('../services/whatsapp');
-const { buscarLeadsParaReativar, incrementarTentativaReativacao } = require('../utils/clienteCache');
+const { buscarLeadsParaReativar, incrementarTentativaReativacao, marcarAgendou } = require('../utils/clienteCache');
 const fisiosoft = require('../services/fisiosoft');
 
 const MENSAGENS = {
@@ -13,15 +13,11 @@ const MENSAGENS = {
 
 async function clienteTemAgendamentoFuturo(telefone) {
   try {
-    // Busca cliente pelo telefone no cache
     const { buscarClientePorTelefone } = require('../utils/clienteCache');
     const cliente = await buscarClientePorTelefone(telefone);
     if (!cliente || !cliente.Id) return false;
-
-    // Consulta agendamentos futuros no Fisiosoft
     const agendamentos = await fisiosoft.listarAgendamentosCliente(cliente.Id);
     if (agendamentos && agendamentos.length > 0) return true;
-
     return false;
   } catch (err) {
     console.error('Erro ao verificar agendamentos:', err.message);
@@ -44,8 +40,6 @@ async function executarRemarketing() {
       const temAgendamento = await clienteTemAgendamentoFuturo(lead.telefone);
       if (temAgendamento) {
         console.log(`Remarketing ignorado para ${lead.telefone} — já tem agendamento futuro`);
-        // Marca como agendou para não reativar mais
-        const { marcarAgendou } = require('../utils/clienteCache');
         await marcarAgendou(lead.telefone);
         continue;
       }
