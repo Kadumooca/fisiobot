@@ -16,8 +16,8 @@ const BOAS_VINDAS = `━━━━━━━━━━━━━━━━━━
 
 Olá! Como posso te ajudar? 😊
 
-*1.* 🗂️ Ver menu de opções
-*2.* 💬 Falar com a Lissa - Atendente Virtual
+*1.* 💬 Falar com a Lissa - Assistente Virtual
+*2.* 👤 Falar com a Recepção
 
 Digite o número da opção desejada
 ━━━━━━━━━━━━━━━━━━
@@ -203,12 +203,14 @@ async function processarMensagem(telefone, mensagem) {
 
   if (sessao.etapa === 'aguardando_escolha_menu') {
     if (texto === '1') {
-      setSessao(telefone, { etapa: 'menu' });
-      return enviarMensagem(telefone, MENU_PRINCIPAL);
+      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
+      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
     }
     if (texto === '2') {
-      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
-      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, atendente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
+      setSessao(telefone, { etapa: 'atendimento_humano' });
+      return enviarMensagem(telefone,
+        `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`
+      );
     }
     // Qualquer outra coisa — encerra silenciosamente e não reativa
     await marcarNaoReativar(telefone);
@@ -305,14 +307,13 @@ async function handleMenu(telefone, texto) {
       return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para voltar.\n_ou digite *sair* para encerrar_`);
     case '6':
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
-      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, atendente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
+      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
     case '7':
       setSessao(telefone, { etapa: 'atendimento_humano' });
       return enviarMensagem(telefone,
         `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`
       );
     default:
-      // Qualquer coisa fora do menu — encerra silenciosamente
       await marcarNaoReativar(telefone);
       setSessao(telefone, { etapa: 'encerrado' });
       return;
