@@ -2,12 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const { processarMensagem } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
+const { enviarResumoDiario } = require('./jobs/resumoDiario');
 const { enviarMensagem } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
+const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/dashboard', dashboardRouter);
 
 const timeouts = new Map();
 
@@ -24,7 +27,6 @@ function limparTimeouts(telefone) {
 
 function agendarTimeoutHumano(telefone) {
   limparTimeouts(telefone);
-  // Após 5 horas sem mensagem, libera o bot novamente
   const th = setTimeout(async () => {
     const s = getSessao(telefone);
     if (s.etapa !== 'atendimento_humano') return;
@@ -91,16 +93,8 @@ function agendarTimeoutsOferta(telefone) {
 
 function detectarMidia(body) {
   const msg = body.data?.message;
-  if (
-    msg?.audioMessage ||
-    msg?.videoMessage ||
-    msg?.imageMessage ||
-    msg?.documentMessage ||
-    msg?.stickerMessage ||
-    msg?.voiceMessage ||
-    msg?.pttMessage
-  ) return true;
-  return false;
+  return !!(msg?.audioMessage || msg?.videoMessage || msg?.imageMessage ||
+    msg?.documentMessage || msg?.stickerMessage || msg?.voiceMessage || msg?.pttMessage);
 }
 
 function detectarPerguntaSobreAudio(mensagem) {
@@ -133,13 +127,11 @@ app.post('/webhook', async (req, res) => {
 
     const sessaoAtual = getSessao(telefone);
 
-    // Atendimento humano ativo — ignora tudo e renova o timer de 5h
     if (sessaoAtual.etapa === 'atendimento_humano') {
       agendarTimeoutHumano(telefone);
       return res.sendStatus(200);
     }
 
-    // Detecta mídia enviada (áudio, vídeo, foto)
     if (detectarMidia(body)) {
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
       limparTimeouts(telefone);
@@ -151,7 +143,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Detecta pergunta sobre envio de mídia no texto
     if (detectarPerguntaSobreAudio(mensagem)) {
       if (sessaoAtual.etapa === 'encerrado') return res.sendStatus(200);
       await enviarMensagem(telefone,
@@ -169,7 +160,6 @@ app.post('/webhook', async (req, res) => {
 
     const sessaoDepois = getSessao(telefone);
 
-    // Se passou para atendimento humano, agenda timer de 5h
     if (sessaoDepois.etapa === 'atendimento_humano') {
       agendarTimeoutHumano(telefone);
     } else if (sessaoDepois.etapa === 'aguardando_resposta_agendamento') {
@@ -187,17 +177,31 @@ app.post('/webhook', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+// Remarketing a cada 30 min
 setInterval(async () => {
-  try {
-    await executarRemarketing();
-  } catch (err) {
-    console.error('Erro no job de remarketing:', err);
-  }
+  try { await executarRemarketing(); }
+  catch (err) { console.error('Erro remarketing:', err); }
 }, 30 * 60 * 1000);
 
+// Resumo diário às 20h
+function agendarResumoDiario() {
+  const agora = new Date();
+  const alvo = new Date();
+  alvo.setHours(20, 0, 0, 0);
+  if (agora >= alvo) alvo.setDate(alvo.getDate() + 1);
+  const diff = alvo - agora;
+  setTimeout(async () => {
+    await enviarResumoDiario();
+    setInterval(enviarResumoDiario, 24 * 60 * 60 * 1000);
+  }, diff);
+  console.log(`Resumo diário agendado para ${alvo.toLocaleString('pt-BR')}`);
+}
+
+agendarResumoDiario();
 executarRemarketing().catch(console.error);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`FisioBot rodando na porta ${PORT}`);
+  console.log(`Dashboard: https://fisiobot-production.up.railway.app/dashboard`);
 });
