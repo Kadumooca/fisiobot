@@ -35,7 +35,7 @@ Como posso te ajudar? 😊
 4️⃣  🗓️ Ver meus agendamentos
 5️⃣  ❓ Dúvidas frequentes
 6️⃣  💬 Falar com a Lissa - Atendente Virtual
-7️⃣  👤 Falar com um Atendente Humano
+7️⃣  👤 Falar com a Recepção
 
 0️⃣  🔚 Encerrar atendimento
 ━━━━━━━━━━━━━━━━━━
