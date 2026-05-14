@@ -152,7 +152,7 @@ app.post('/webhook', async (req, res) => {
       const s = getSessao(telefone);
       if (s.etapa === 'atendimento_humano') agendarTimeoutHumano(telefone);
       else if (!['encerrado'].includes(s.etapa)) agendarTimeoutsInatividade(telefone);
-    }, 4000);
+    }, 2000);
 
     mensagensPendentes.get(telefone).timer = timer;
     return res.sendStatus(200);
