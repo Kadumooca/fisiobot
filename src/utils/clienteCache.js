@@ -105,18 +105,22 @@ async function registrarLead(telefone, nome, especialidade) {
 async function registrarConversa(telefone) {
   try {
     const existe = await pool.query(
-      `SELECT id FROM conversas WHERE telefone = $1 AND status = 'ativa'`, [telefone]
+      `SELECT id FROM conversas WHERE telefone = $1 AND DATE(criado_em) = CURRENT_DATE`, [telefone]
     );
     if (existe.rows.length === 0) {
       await pool.query(
         `INSERT INTO conversas (telefone, status) VALUES ($1, 'ativa')`, [telefone]
+      );
+    } else {
+      await pool.query(
+        `UPDATE conversas SET atualizado_em = NOW() WHERE telefone = $1 AND DATE(criado_em) = CURRENT_DATE`,
+        [telefone]
       );
     }
   } catch (err) {
     console.error('Erro registrarConversa:', err.message);
   }
 }
-
 async function marcarAgendou(telefone) {
   try {
     await pool.query(
