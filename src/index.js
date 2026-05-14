@@ -13,7 +13,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/dashboard', dashboardRouter);
 
-// Números internos — bot ignora completamente
 const NUMEROS_INTERNOS = new Set([
   '5511963675329', '5511959652048', '5511975444523', '5511988404884',
   '5511985033232', '5511998685040', '5511947034822', '5511973858548',
@@ -38,28 +37,27 @@ function limparTimeouts(telefone) {
 function agendarTimeoutHumano(telefone) {
   limparTimeouts(telefone);
   const th = setTimeout(() => {
-    const s = getSessao(telefone);
-    if (s.etapa === 'atendimento_humano') setSessao(telefone, { etapa: 'encerrado' });
+    getSessao(telefone).then(s => {
+      if (s.etapa === 'atendimento_humano') setSessao(telefone, { etapa: 'encerrado' });
+    });
   }, 60 * 60 * 1000);
   timeouts.set(telefone, { th });
 }
 
 function agendarTimeoutsInatividade(telefone) {
   limparTimeouts(telefone);
-  const s = getSessao(telefone);
-  if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
 
   const t1 = setTimeout(async () => {
-    const s = getSessao(telefone);
+    const s = await getSessao(telefone);
     if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
     await enviarMensagem(telefone, `Ainda está por aí? 😊 Estou aqui caso queira continuar!`);
   }, 20 * 60 * 1000);
 
   const t2 = setTimeout(async () => {
-    const s = getSessao(telefone);
+    const s = await getSessao(telefone);
     if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
     await enviarMensagem(telefone, `Tudo bem! 😊 Vou encerrar por agora.\n\nQuando quiser retomar é só nos chamar com um *Olá*!`);
-    setSessao(telefone, { etapa: 'encerrado' });
+    await setSessao(telefone, { etapa: 'encerrado' });
     limparTimeouts(telefone);
   }, 40 * 60 * 1000);
 
@@ -78,10 +76,8 @@ app.post('/webhook', async (req, res) => {
     const telefone = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
 
-    // Ignora números internos
     if (NUMEROS_INTERNOS.has(telefone)) return res.sendStatus(200);
 
-    // Registra mensagens nossas
     if (body.data?.key?.fromMe) {
       ultimaMensagemNossa.set(telefone, Date.now());
       return res.sendStatus(200);
@@ -90,38 +86,30 @@ app.post('/webhook', async (req, res) => {
     const mensagem = body.data?.message?.conversation ||
                      body.data?.message?.extendedTextMessage?.text;
 
-    const sessao = getSessao(telefone);
+    const sessao = await getSessao(telefone);
     const tempoNossa = ultimaMensagemNossa.get(telefone);
     const tempoDesde = tempoNossa ? (Date.now() - tempoNossa) : Infinity;
     const textoLower = (mensagem || '').toLowerCase().trim();
     const ePalavraAtivacao = PALAVRAS_ATIVACAO.some(p => textoLower === p);
 
-    // Controle de janela 30min após mensagem nossa
     if (tempoNossa) {
-      if (tempoDesde < TRINTA_MIN) {
-        // Dentro de 30min — silencioso
-        return res.sendStatus(200);
-      }
+      if (tempoDesde < TRINTA_MIN) return res.sendStatus(200);
       if (tempoDesde >= TRINTA_MIN && ePalavraAtivacao) {
-        // Após 30min com palavra de ativação — reativa
         ultimaMensagemNossa.delete(telefone);
       } else if (tempoDesde >= TRINTA_MIN && !ePalavraAtivacao) {
-        // Após 30min sem palavra de ativação — ignora
         return res.sendStatus(200);
       }
     }
 
-    // Atendimento humano
     if (sessao.etapa === 'atendimento_humano') {
       agendarTimeoutHumano(telefone);
       return res.sendStatus(200);
     }
 
-    // Mídia
     if (detectarMidia(body)) {
       if (sessao.etapa === 'encerrado') return res.sendStatus(200);
       limparTimeouts(telefone);
-      setSessao(telefone, { etapa: 'atendimento_humano' });
+      await setSessao(telefone, { etapa: 'atendimento_humano' });
       agendarTimeoutHumano(telefone);
       await enviarMensagem(telefone, `Recebi sua mídia! 😊 Um atendente dará continuidade em breve. Por favor aguarde! 🙏`);
       return res.sendStatus(200);
@@ -129,7 +117,7 @@ app.post('/webhook', async (req, res) => {
 
     if (!mensagem) return res.sendStatus(200);
 
-    // Acumula mensagens por 4 segundos
+    // Acumula mensagens por 2 segundos
     if (mensagensPendentes.has(telefone)) {
       clearTimeout(mensagensPendentes.get(telefone).timer);
       mensagensPendentes.get(telefone).textos.push(mensagem);
@@ -149,7 +137,7 @@ app.post('/webhook', async (req, res) => {
       } catch (err) {
         console.error(`Erro processarMensagem ${telefone}:`, err.message);
       }
-      const s = getSessao(telefone);
+      const s = await getSessao(telefone);
       if (s.etapa === 'atendimento_humano') agendarTimeoutHumano(telefone);
       else if (!['encerrado'].includes(s.etapa)) agendarTimeoutsInatividade(telefone);
     }, 2000);
@@ -166,6 +154,7 @@ app.get('/setup-db', async (req, res) => {
   const { Pool } = require('pg');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS sessoes (telefone TEXT PRIMARY KEY, dados JSONB, atualizado_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS clientes_cache (telefone TEXT PRIMARY KEY, dados JSONB, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, telefone TEXT, nome TEXT, especialidade TEXT, status TEXT DEFAULT 'lead', etapa_encerramento TEXT, tentativas_reativacao INTEGER DEFAULT 0, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), agendou_em TIMESTAMP, ultima_mensagem_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS conversas (id SERIAL PRIMARY KEY, telefone TEXT, etapa TEXT, status TEXT DEFAULT 'ativa', transferido_humano BOOLEAN DEFAULT FALSE, agendou BOOLEAN DEFAULT FALSE, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), encerrado_em TIMESTAMP)`);
