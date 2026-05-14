@@ -1,19 +1,57 @@
-const sessoes = new Map();
+const { Pool } = require('pg');
 
-function getSessao(telefone) {
-  if (!sessoes.has(telefone)) {
-    sessoes.set(telefone, { etapa: 'encerrado' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+
+// Cria tabela de sessões se não existir
+pool.query(`
+  CREATE TABLE IF NOT EXISTS sessoes (
+    telefone TEXT PRIMARY KEY,
+    dados JSONB,
+    atualizado_em TIMESTAMP DEFAULT NOW()
+  )
+`).catch(console.error);
+
+const cache = new Map(); // cache local para velocidade
+
+async function getSessao(telefone) {
+  if (cache.has(telefone)) return cache.get(telefone);
+  try {
+    const res = await pool.query('SELECT dados FROM sessoes WHERE telefone = $1', [telefone]);
+    const dados = res.rows[0]?.dados || { etapa: 'encerrado' };
+    cache.set(telefone, dados);
+    return dados;
+  } catch (err) {
+    console.error('Erro getSessao:', err.message);
+    return { etapa: 'encerrado' };
   }
-  return sessoes.get(telefone);
 }
 
-function setSessao(telefone, dados) {
-  const atual = getSessao(telefone);
-  sessoes.set(telefone, { ...atual, ...dados });
+async function setSessao(telefone, novosDados) {
+  const atual = cache.get(telefone) || { etapa: 'encerrado' };
+  const merged = { ...atual, ...novosDados };
+  cache.set(telefone, merged);
+  try {
+    await pool.query(
+      `INSERT INTO sessoes (telefone, dados, atualizado_em) VALUES ($1, $2, NOW())
+       ON CONFLICT (telefone) DO UPDATE SET dados = $2, atualizado_em = NOW()`,
+      [telefone, JSON.stringify(merged)]
+    );
+  } catch (err) {
+    console.error('Erro setSessao:', err.message);
+  }
 }
 
-function resetarSessao(telefone) {
-  sessoes.set(telefone, { etapa: 'menu' });
+async function resetarSessao(telefone) {
+  cache.delete(telefone);
+  try {
+    await pool.query(
+      `INSERT INTO sessoes (telefone, dados, atualizado_em) VALUES ($1, $2, NOW())
+       ON CONFLICT (telefone) DO UPDATE SET dados = $2, atualizado_em = NOW()`,
+      [telefone, JSON.stringify({ etapa: 'encerrado' })]
+    );
+  } catch (err) {
+    console.error('Erro resetarSessao:', err.message);
+  }
 }
 
 module.exports = { getSessao, setSessao, resetarSessao };
