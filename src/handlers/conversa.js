@@ -100,7 +100,7 @@ const AGENDAS_POR_ESPECIALIDADE = {
     ]
   },
   '7': {
-    nome: 'Drenagem / Massagem Relaxante',
+    nome: 'Drenagem / Massagem Relaxante / Liberação Miofascial',
     periodos: [
       { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
     ]
