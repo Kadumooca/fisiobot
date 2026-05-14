@@ -28,20 +28,6 @@ Como posso te ajudar? 😊
 _Digite o número da opção_
 _ou digite *sair* para encerrar_`;
 
-const BOAS_VINDAS = `━━━━━━━━━━━━━━━━━━
-🏥 *Clínica Lituânia*
-━━━━━━━━━━━━━━━━━━
-
-Olá! Como posso te ajudar? 😊
-
-*1.* 🗂️ Ver menu de opções
-*2.* 💬 Falar com a Lissa - Assistente Virtual
-*3.* 👤 Falar com a Recepção
-
-Digite o número da opção desejada
-━━━━━━━━━━━━━━━━━━
-_ou digite *sair* para encerrar_`;
-
 const PALAVRAS_REATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_SITE = ['olá, gostaria de mais informações', 'ola, gostaria de mais informacoes', 'gostaria de mais informações', 'gostaria de mais informacoes'];
 const PALAVRAS_AGRADECIMENTO = ['obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks', 'agradeço', 'agradeco', 'grato', 'grata', 'muito obrigado', 'muito obrigada'];
@@ -100,7 +86,7 @@ const AGENDAS_POR_ESPECIALIDADE = {
     ]
   },
   '7': {
-    nome: 'Drenagem / Massagem Relaxante / Liberação Miofascial',
+    nome: 'Drenagem / Massagem Relaxante',
     periodos: [
       { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
     ]
@@ -184,9 +170,8 @@ async function processarMensagem(telefone, mensagem) {
   const texto = mensagem.trim();
   const textoLower = texto.toLowerCase();
   const sessao = getSessao(telefone);
-  await marcarRespondeuRemarketing(telefone);
 
-  // Registra conversa
+  await marcarRespondeuRemarketing(telefone);
   await registrarConversa(telefone);
 
   // Detecta intenção de cancelamento/adiamento
@@ -194,7 +179,7 @@ async function processarMensagem(telefone, mensagem) {
     await marcarNaoReativar(telefone);
   }
 
-  // Comandos globais sempre funcionam
+  // Comandos globais
   if (textoLower === 'sair') {
     setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `✅ Atendimento encerrado. Até logo! 😊\n\nQuando precisar, é só nos enviar um *Olá*.`);
@@ -207,15 +192,9 @@ async function processarMensagem(telefone, mensagem) {
 
   if (texto === '0') return voltarAnterior(telefone, sessao);
 
-  // Sessão encerrada — qualquer mensagem vai para a Lissa analisar
+  // Sessão encerrada — qualquer mensagem com conteúdo vai para a Lissa
   if (sessao.etapa === 'encerrado') {
-    // Só reativa se for palavra de ativação ou mensagem com conteúdo
-    const ativou = PALAVRAS_REATIVACAO.some(p => textoLower === p);
-    const ativouSite = FRASES_SITE.some(p => textoLower.includes(p));
-    const temConteudo = texto.length > 3;
-
-    if (ativou || ativouSite || temConteudo) {
-      // Vai direto para a Lissa analisar o contexto
+    if (texto.length > 1) {
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return handleLissa(telefone, texto, getSessao(telefone));
     }
@@ -230,25 +209,6 @@ async function processarMensagem(telefone, mensagem) {
       setSessao(telefone, { etapa: 'encerrado' });
       return enviarMensagem(telefone, `De nada! 😊 Foi um prazer te atender.\n\nEsperamos te ver em breve na *Clínica Lituânia*!\n\nQuando precisar, é só nos enviar um *Olá*. 👋`);
     }
-  }
-
-  // Escolha do menu de boas-vindas
-  if (sessao.etapa === 'aguardando_escolha_menu') {
-    if (texto === '1') {
-      setSessao(telefone, { etapa: 'menu' });
-      return enviarMensagem(telefone, MENU_PRINCIPAL);
-    }
-    if (texto === '2') {
-      setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
-      return enviarMensagem(telefone, `Oi! Eu sou a *Lissa*, assistente virtual da Clínica Lituânia! 😊\n\nEstou aqui para te ajudar a encontrar o melhor tratamento para você.\n\nMe conta: qual é a sua dor ou queixa hoje?`);
-    }
-    if (texto === '3') {
-      setSessao(telefone, { etapa: 'atendimento_humano' });
-      return enviarMensagem(telefone, `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`);
-    }
-    // Resposta fora das opções — passa para Lissa analisar
-    setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
-    return handleLissa(telefone, texto, getSessao(telefone));
   }
 
   switch (sessao.etapa) {
@@ -324,7 +284,6 @@ async function handleMenu(telefone, texto) {
       setSessao(telefone, { etapa: 'atendimento_humano' });
       return enviarMensagem(telefone, `Certo! 😊 A partir deste momento você será atendido por um de nossos atendentes.\n\nEm breve entraremos em contato. Até logo! 👋`);
     default:
-      // Qualquer coisa fora do menu — passa para Lissa
       setSessao(telefone, { etapa: 'conversando_com_lissa', historicoLissa: [], regiaoCorpo: null });
       return handleLissa(telefone, texto, getSessao(telefone));
   }
@@ -423,7 +382,6 @@ async function handleRespostaAgendamento(telefone, texto, sessao) {
     return;
   }
 
-  // Resposta ambígua — passa para Lissa
   setSessao(telefone, { etapa: 'conversando_com_lissa' });
   return handleLissa(telefone, texto, sessao);
 }
