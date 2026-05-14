@@ -19,13 +19,17 @@ function autenticar(req, res, next) {
 }
 
 router.get('/', autenticar, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+
   const stats = await buscarEstatisticas();
   if (!stats) return res.status(500).send('Erro ao buscar dados');
 
   const porDiaLabels = stats.porDia.map(d => d.dia.toISOString().split('T')[0]);
-  const porDiaData = stats.porDia.map(d => d.total);
+  const porDiaData = stats.porDia.map(d => parseInt(d.total));
   const espLabels = stats.porEspecialidade.map(e => e.especialidade || 'Outros');
-  const espData = stats.porEspecialidade.map(e => e.total);
+  const espData = stats.porEspecialidade.map(e => parseInt(e.total));
 
   const leadsHTML = stats.leadsNaoConvertidos.map(l => {
     const tempo = Math.round((Date.now() - new Date(l.ultima_mensagem_em)) / 1000 / 60);
@@ -74,7 +78,6 @@ router.get('/', autenticar, async (req, res) => {
     th { background: #f8f9fa; padding: 10px 14px; text-align: left; color: #555; font-weight: 600; }
     td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; }
     tr:last-child td { border-bottom: none; }
-    .badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; background: #fff3cd; color: #856404; }
     .atualizado { text-align: center; font-size: 12px; color: #999; margin-top: 10px; padding-bottom: 30px; }
     @media(max-width: 768px) { .charts { grid-template-columns: 1fr; } }
   </style>
