@@ -140,6 +140,7 @@ async function processarMensagem(telefone, mensagem) {
   }
 
   switch (sessao.etapa) {
+    case 'conversando_lissa':             return handleLissa(telefone, texto, sessao);
     case 'aguardando_menu':               return handleMenu(telefone, texto, sessao);
     case 'aguardando_tipo_cliente':       return handleTipoCliente(telefone, texto, sessao);
     case 'aguardando_para_quem':          return handleParaQuem(telefone, texto, sessao);
