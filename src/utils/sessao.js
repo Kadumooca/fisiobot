@@ -2,7 +2,6 @@ const { Pool } = require('pg');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-// Cria tabela de sessões se não existir
 pool.query(`
   CREATE TABLE IF NOT EXISTS sessoes (
     telefone TEXT PRIMARY KEY,
@@ -11,7 +10,7 @@ pool.query(`
   )
 `).catch(console.error);
 
-const cache = new Map(); // cache local para velocidade
+const cache = new Map();
 
 async function getSessao(telefone) {
   if (cache.has(telefone)) return cache.get(telefone);
