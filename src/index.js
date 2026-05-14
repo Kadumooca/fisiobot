@@ -17,8 +17,7 @@ const NUMEROS_INTERNOS = new Set([
   '5511963675329', '5511959652048', '5511975444523', '5511988404884',
   '5511985033232', '5511998685040', '5511947034822', '5511973858548',
   '5511946650682', '5511997540484', '5511999759486', '5511981490375',
-  '5511999811668', '5511983575930', '5511985341813',
-  '5511947034822'
+  '5511999811668', '5511983575930', '5511985341813'
 ]);
 
 const timeouts = new Map();
@@ -79,8 +78,15 @@ app.post('/webhook', async (req, res) => {
 
     if (NUMEROS_INTERNOS.has(telefone)) return res.sendStatus(200);
 
+    // Mensagem enviada pelo WhatsApp da clínica (atendente humano, não o bot)
     if (body.data?.key?.fromMe) {
-      ultimaMensagemNossa.set(telefone, Date.now());
+      // Só registra se for mensagem digitada por humano (não pelo bot via API)
+      const idMensagem = body.data?.key?.id || '';
+      const ehMensagemBot = idMensagem.startsWith('BAE') || idMensagem.startsWith('3EB');
+      if (!ehMensagemBot) {
+        ultimaMensagemNossa.set(telefone, Date.now());
+        console.log(`[HUMANO] Mensagem nossa para ${telefone}`);
+      }
       return res.sendStatus(200);
     }
 
@@ -94,20 +100,17 @@ app.post('/webhook', async (req, res) => {
     const ePalavraAtivacao = PALAVRAS_ATIVACAO.some(p => textoLower === p);
 
     if (tempoNossa) {
-      console.log(`[DEBUG] ${telefone} - tempoDesde: ${Math.round(tempoDesde/1000)}s - ePalavraAtivacao: ${ePalavraAtivacao}`);
       if (tempoDesde < TRINTA_MIN) {
-        console.log(`[DEBUG] Bloqueado - dentro de 30min`);
+        console.log(`[BLOQUEADO] ${telefone} - dentro de 30min (${Math.round(tempoDesde/60000)}min atrás)`);
         return res.sendStatus(200);
       }
       if (tempoDesde >= TRINTA_MIN && ePalavraAtivacao) {
         ultimaMensagemNossa.delete(telefone);
       } else if (tempoDesde >= TRINTA_MIN && !ePalavraAtivacao) {
-        console.log(`[DEBUG] Bloqueado - sem palavra de ativação`);
+        console.log(`[BLOQUEADO] ${telefone} - sem palavra de ativação`);
         return res.sendStatus(200);
       }
     }
-
-    console.log(`[DEBUG] ${telefone} - sessao.etapa: ${sessao.etapa}`);
 
     if (sessao.etapa === 'atendimento_humano') {
       agendarTimeoutHumano(telefone);
@@ -187,6 +190,14 @@ app.get('/setup-db', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+process.on('uncaughtException', (err) => {
+  console.error('ERRO NÃO CAPTURADO:', err.message, err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('PROMISE REJEITADA:', reason);
+});
+
 setInterval(async () => {
   try { await executarRemarketing(); }
   catch (err) { console.error('Erro remarketing:', err); }
@@ -206,14 +217,6 @@ function agendarResumoDiario() {
 
 agendarResumoDiario();
 executarRemarketing().catch(console.error);
-
-process.on('uncaughtException', (err) => {
-  console.error('ERRO NÃO CAPTURADO:', err.message, err.stack);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('PROMISE REJEITADA:', reason);
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
