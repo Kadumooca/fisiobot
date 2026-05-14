@@ -3,42 +3,9 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 async function inicializarBanco() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS clientes_cache (
-      telefone TEXT PRIMARY KEY,
-      dados JSONB,
-      criado_em TIMESTAMP DEFAULT NOW(),
-      atualizado_em TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS leads (
-      id SERIAL PRIMARY KEY,
-      telefone TEXT,
-      nome TEXT,
-      especialidade TEXT,
-      status TEXT DEFAULT 'lead',
-      etapa_encerramento TEXT,
-      tentativas_reativacao INTEGER DEFAULT 0,
-      criado_em TIMESTAMP DEFAULT NOW(),
-      atualizado_em TIMESTAMP DEFAULT NOW(),
-      agendou_em TIMESTAMP,
-      ultima_mensagem_em TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS conversas (
-      id SERIAL PRIMARY KEY,
-      telefone TEXT,
-      etapa TEXT,
-      status TEXT DEFAULT 'ativa',
-      transferido_humano BOOLEAN DEFAULT FALSE,
-      agendou BOOLEAN DEFAULT FALSE,
-      criado_em TIMESTAMP DEFAULT NOW(),
-      atualizado_em TIMESTAMP DEFAULT NOW(),
-      encerrado_em TIMESTAMP
-    )
-  `);
+  await pool.query(`CREATE TABLE IF NOT EXISTS clientes_cache (telefone TEXT PRIMARY KEY, dados JSONB, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW())`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, telefone TEXT, nome TEXT, especialidade TEXT, status TEXT DEFAULT 'lead', etapa_encerramento TEXT, tentativas_reativacao INTEGER DEFAULT 0, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), agendou_em TIMESTAMP, ultima_mensagem_em TIMESTAMP DEFAULT NOW())`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS conversas (id SERIAL PRIMARY KEY, telefone TEXT, etapa TEXT, status TEXT DEFAULT 'ativa', transferido_humano BOOLEAN DEFAULT FALSE, agendou BOOLEAN DEFAULT FALSE, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), encerrado_em TIMESTAMP)`);
   await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS tentativas_reativacao INTEGER DEFAULT 0`);
   await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultima_mensagem_em TIMESTAMP DEFAULT NOW()`);
   await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS agendou_em TIMESTAMP`);
@@ -70,8 +37,7 @@ async function buscarClientePorTelefone(telefone) {
 async function salvarClientePorTelefone(telefone, dados) {
   try {
     await pool.query(
-      `INSERT INTO clientes_cache (telefone, dados, atualizado_em)
-       VALUES ($1, $2, NOW())
+      `INSERT INTO clientes_cache (telefone, dados, atualizado_em) VALUES ($1, $2, NOW())
        ON CONFLICT (telefone) DO UPDATE SET dados = $2, atualizado_em = NOW()`,
       [telefone, JSON.stringify(dados)]
     );
@@ -85,14 +51,12 @@ async function registrarLead(telefone, nome, especialidade) {
     const existe = await pool.query('SELECT id FROM leads WHERE telefone = $1', [telefone]);
     if (existe.rows.length === 0) {
       await pool.query(
-        `INSERT INTO leads (telefone, nome, especialidade, status, ultima_mensagem_em)
-         VALUES ($1, $2, $3, 'lead', NOW())`,
+        `INSERT INTO leads (telefone, nome, especialidade, status, ultima_mensagem_em) VALUES ($1, $2, $3, 'lead', NOW())`,
         [telefone, nome || 'Desconhecido', especialidade]
       );
     } else {
       await pool.query(
-        `UPDATE leads SET especialidade = $2, atualizado_em = NOW(), ultima_mensagem_em = NOW()
-         WHERE telefone = $1`,
+        `UPDATE leads SET especialidade = $2, atualizado_em = NOW(), ultima_mensagem_em = NOW() WHERE telefone = $1`,
         [telefone, especialidade]
       );
     }
@@ -108,9 +72,7 @@ async function registrarConversa(telefone) {
       `SELECT id FROM conversas WHERE telefone = $1 AND DATE(criado_em) = CURRENT_DATE`, [telefone]
     );
     if (existe.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO conversas (telefone, status) VALUES ($1, 'ativa')`, [telefone]
-      );
+      await pool.query(`INSERT INTO conversas (telefone, status) VALUES ($1, 'ativa')`, [telefone]);
     } else {
       await pool.query(
         `UPDATE conversas SET atualizado_em = NOW() WHERE telefone = $1 AND DATE(criado_em) = CURRENT_DATE`,
@@ -121,11 +83,11 @@ async function registrarConversa(telefone) {
     console.error('Erro registrarConversa:', err.message);
   }
 }
+
 async function marcarAgendou(telefone) {
   try {
     await pool.query(
-      `UPDATE leads SET status = 'agendou', agendou_em = NOW(), atualizado_em = NOW()
-       WHERE telefone = $1`,
+      `UPDATE leads SET status = 'agendou', agendou_em = NOW(), atualizado_em = NOW() WHERE telefone = $1`,
       [telefone]
     );
     await pool.query(
@@ -169,8 +131,7 @@ async function marcarEncerrado(telefone) {
 async function marcarNaoReativar(telefone) {
   try {
     await pool.query(
-      `UPDATE leads SET status = 'nao_reativar', atualizado_em = NOW()
-       WHERE telefone = $1`,
+      `UPDATE leads SET status = 'nao_reativar', atualizado_em = NOW() WHERE telefone = $1`,
       [telefone]
     );
   } catch (err) {
@@ -185,10 +146,7 @@ async function marcarRespondeuRemarketing(telefone) {
        WHERE telefone = $1 AND status = 'remarketing'`,
       [telefone]
     );
-    await pool.query(
-      `UPDATE leads SET ultima_mensagem_em = NOW() WHERE telefone = $1`,
-      [telefone]
-    );
+    await pool.query(`UPDATE leads SET ultima_mensagem_em = NOW() WHERE telefone = $1`, [telefone]);
   } catch (err) {
     console.error('Erro marcarRespondeuRemarketing:', err.message);
   }
@@ -197,10 +155,8 @@ async function marcarRespondeuRemarketing(telefone) {
 async function buscarLeadsParaReativar() {
   try {
     const resultado = [];
-
     const r1 = await pool.query(`
-      SELECT telefone, nome, especialidade, tentativas_reativacao
-      FROM leads
+      SELECT telefone, nome, especialidade, tentativas_reativacao FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 0
@@ -210,8 +166,7 @@ async function buscarLeadsParaReativar() {
     r1.rows.forEach(r => resultado.push({ ...r, tentativa: 1 }));
 
     const r2 = await pool.query(`
-      SELECT telefone, nome, especialidade, tentativas_reativacao
-      FROM leads
+      SELECT telefone, nome, especialidade, tentativas_reativacao FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 1
@@ -221,8 +176,7 @@ async function buscarLeadsParaReativar() {
     r2.rows.forEach(r => resultado.push({ ...r, tentativa: 2 }));
 
     const r3 = await pool.query(`
-      SELECT telefone, nome, especialidade, tentativas_reativacao
-      FROM leads
+      SELECT telefone, nome, especialidade, tentativas_reativacao FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 2
@@ -241,8 +195,7 @@ async function buscarLeadsParaReativar() {
 async function incrementarTentativaReativacao(telefone) {
   try {
     await pool.query(
-      `UPDATE leads SET tentativas_reativacao = tentativas_reativacao + 1, atualizado_em = NOW()
-       WHERE telefone = $1`,
+      `UPDATE leads SET tentativas_reativacao = tentativas_reativacao + 1, atualizado_em = NOW() WHERE telefone = $1`,
       [telefone]
     );
   } catch (err) {
@@ -264,19 +217,15 @@ async function buscarEstatisticas() {
     `);
     const porDia = await pool.query(`
       SELECT DATE(criado_em) as dia, COUNT(*) as total
-      FROM conversas
-      WHERE criado_em > NOW() - INTERVAL '7 days'
-      GROUP BY DATE(criado_em)
-      ORDER BY dia ASC
+      FROM conversas WHERE criado_em > NOW() - INTERVAL '7 days'
+      GROUP BY DATE(criado_em) ORDER BY dia ASC
     `);
     const porEspecialidade = await pool.query(`
-      SELECT especialidade, COUNT(*) as total
-      FROM leads
+      SELECT especialidade, COUNT(*) as total FROM leads
       WHERE criado_em > NOW() - INTERVAL '30 days'
-      GROUP BY especialidade
-      ORDER BY total DESC
+      GROUP BY especialidade ORDER BY total DESC
     `);
-const leadsNaoConvertidos = await pool.query(`
+    const leadsNaoConvertidos = await pool.query(`
       SELECT DISTINCT ON (telefone) telefone, nome, especialidade, ultima_mensagem_em, tentativas_reativacao
       FROM leads
       WHERE status IN ('lead', 'respondeu')
