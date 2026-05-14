@@ -100,7 +100,7 @@ const AGENDAS_POR_ESPECIALIDADE = {
     ]
   },
   '7': {
-    nome: 'Drenagem / Massagem Relaxante',
+    nome: 'Drenagem / Massagem Relaxante / Liberação Miofascial',
     periodos: [
       { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
     ]
@@ -184,6 +184,12 @@ async function processarMensagem(telefone, mensagem) {
   const textoLower = texto.toLowerCase();
   const sessao = getSessao(telefone);
   await marcarRespondeuRemarketing(telefone);
+
+  // Registra conversa a cada interação
+  const { registrarConversa } = require('../utils/clienteCache');
+  await registrarConversa(telefone);
+
+  // Detecta intenção de cancelamento/adiamento — não reativar
 
   // Detecta intenção de cancelamento/adiamento — não reativar
   if (FRASES_NAO_REATIVAR.some(f => textoLower.includes(f))) {
