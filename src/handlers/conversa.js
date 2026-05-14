@@ -4,7 +4,7 @@ const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
 const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
 const { listarFAQs, buscarResposta } = require('../utils/faq');
-const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, marcarAgendou, marcarRespondeuRemarketing, marcarNaoReativar } = require('../utils/clienteCache');
+const { buscarClientePorTelefone, salvarClientePorTelefone, registrarLead, registrarConversa, marcarAgendou, marcarRespondeuRemarketing, marcarNaoReativar } = require('../utils/clienteCache');
 
 const WHATSAPP_RECEPCAO = 'https://wa.me/5511987281427';
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n💬 WhatsApp: wa.me/5511987281427\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
@@ -187,7 +187,6 @@ async function processarMensagem(telefone, mensagem) {
   await marcarRespondeuRemarketing(telefone);
 
   // Registra conversa
-  const { registrarConversa } = require('../utils/clienteCache');
   await registrarConversa(telefone);
 
   // Detecta intenção de cancelamento/adiamento
