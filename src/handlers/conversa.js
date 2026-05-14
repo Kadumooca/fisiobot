@@ -29,7 +29,7 @@ Como posso te ajudar? 😊
 _Digite o número da opção_`;
 
 const PALAVRAS_AGRADECIMENTO = [
-  'obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks',
+  'obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks', 'valew',
   'agradeço', 'agradeco', 'grato', 'grata', 'muito obrigado', 'muito obrigada'
 ];
 
@@ -69,7 +69,7 @@ const AGENDAS = {
   '6': { nome: 'Consulta Vascular', diasBusca: 30, periodos: [
     { label: '📋 Ver horários disponíveis', agendaId: 11, procedimentoId: 22, idProfissional: 9, agendaNome: 'Consulta Vascular' },
   ]},
-  '7': { nome: 'Drenagem / Massagem', periodos: [
+  '7': { nome: 'Drenagem / Massagem / Liberação Miofascial', periodos: [
     { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
   ]},
 };
