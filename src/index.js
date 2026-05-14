@@ -142,10 +142,10 @@ app.post('/webhook', async (req, res) => {
     const textoLower = (mensagem || '').toLowerCase().trim();
     const ePalavraAtivacao = PALAVRAS_REATIVACAO.some(p => textoLower === p);
 
-    // Clínica iniciou conversa e bot está encerrado
-    if (sessaoAtual.etapa === 'encerrado' && tempoUltimaNossa) {
+   // Clínica iniciou conversa — controle de janela de 30min
+    if (tempoUltimaNossa) {
       if (dentroJanela30min) {
-        // Dentro de 30min — ignora silenciosamente (continuação da conversa)
+        // Dentro de 30min — ignora silenciosamente
         return res.sendStatus(200);
       }
       if (foraJanela30min && ePalavraAtivacao) {
