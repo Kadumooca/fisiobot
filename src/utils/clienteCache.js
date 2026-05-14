@@ -272,12 +272,12 @@ async function buscarEstatisticas() {
       GROUP BY especialidade
       ORDER BY total DESC
     `);
-    const leadsNaoConvertidos = await pool.query(`
-      SELECT telefone, nome, especialidade, ultima_mensagem_em, tentativas_reativacao
+const leadsNaoConvertidos = await pool.query(`
+      SELECT DISTINCT ON (telefone) telefone, nome, especialidade, ultima_mensagem_em, tentativas_reativacao
       FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND ultima_mensagem_em < NOW() - INTERVAL '1 hour'
-      ORDER BY ultima_mensagem_em DESC
+      ORDER BY telefone, ultima_mensagem_em DESC
       LIMIT 20
     `);
 
