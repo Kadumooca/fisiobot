@@ -306,6 +306,7 @@ module.exports = {
   buscarClientePorTelefone,
   salvarClientePorTelefone,
   registrarLead,
+  registrarConversa,
   marcarAgendou,
   marcarTransferidoHumano,
   marcarEncerrado,
