@@ -199,6 +199,14 @@ function agendarResumoDiario() {
 agendarResumoDiario();
 executarRemarketing().catch(console.error);
 
+process.on('uncaughtException', (err) => {
+  console.error('ERRO NÃO CAPTURADO:', err.message, err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('PROMISE REJEITADA:', reason);
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`FisioBot rodando na porta ${PORT}`);
