@@ -1,4 +1,5 @@
 const pool = require('./db');
+
 pool.query(`
   CREATE TABLE IF NOT EXISTS sessoes (
     telefone TEXT PRIMARY KEY,
