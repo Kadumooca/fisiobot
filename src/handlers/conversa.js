@@ -198,9 +198,7 @@ async function handleLissa(telefone, texto, sessao) {
     return enviarMensagem(telefone, MENU_PRINCIPAL);
   }
 
-  if (historico.length >= 14) {
-    return enviarMensagem(telefone, `💬 Para continuar, fale diretamente com nossa equipe:\n\n${CONTATO_HUMANO}`);
-  }
+ // Sem limite de mensagens — Lissa aguarda o cliente responder
 }
 
 async function handleMenu(telefone, texto, sessao) {
