@@ -132,6 +132,7 @@ async function consultarIA(historico) {
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
     console.error('Erro ao consultar IA:', err.message);
+    console.error('Stack:', err.stack);
     return null;
   }
 }
