@@ -130,25 +130,25 @@ async function processarMensagem(telefone, mensagem) {
   }
 
   switch (sessao.etapa) {
-    case 'conversando_lissa':                       return handleLissa(telefone, texto, sessao);
-    case 'aguardando_confirmacao_agendamento_lissa': return handleConfirmacaoLissa(telefone, texto, sessao);
-    case 'aguardando_menu':                         return handleMenu(telefone, texto, sessao);
-    case 'aguardando_tipo_cliente':                 return handleTipoCliente(telefone, texto, sessao);
-    case 'aguardando_para_quem':                    return handleParaQuem(telefone, texto, sessao);
-    case 'aguardando_cpf':                          return handleCPF(telefone, texto, sessao);
-    case 'aguardando_cpf_novo':                     return handleCPFNovo(telefone, texto, sessao);
-    case 'aguardando_nome_novo':                    return handleNomeNovo(telefone, texto, sessao);
-    case 'aguardando_celular_novo':                 return handleCelularNovo(telefone, texto, sessao);
-    case 'aguardando_cpf_terceiro':                 return handleCPFTerceiro(telefone, texto, sessao);
-    case 'aguardando_nome_terceiro':                return handleNomeTerceiro(telefone, texto, sessao);
-    case 'aguardando_celular_terceiro':             return handleCelularTerceiro(telefone, texto, sessao);
-    case 'aguardando_especialidade':                return handleEspecialidade(telefone, texto, sessao);
-    case 'aguardando_periodo':                      return handlePeriodo(telefone, texto, sessao);
-    case 'aguardando_horario':                      return handleHorario(telefone, texto, sessao);
-    case 'aguardando_confirmacao':                  return handleConfirmacao(telefone, texto, sessao);
-    case 'aguardando_cancelamento':                 return handleCancelamento(telefone, texto, sessao);
-    case 'aguardando_confirmacao_cancel':           return handleConfirmacaoCancel(telefone, texto, sessao);
-    case 'aguardando_faq':                          return handleFAQ(telefone, texto);
+    case 'conversando_lissa':                        return handleLissa(telefone, texto, sessao);
+    case 'aguardando_confirmacao_agendamento_lissa':  return handleConfirmacaoLissa(telefone, texto, sessao);
+    case 'aguardando_menu':                          return handleMenu(telefone, texto, sessao);
+    case 'aguardando_tipo_cliente':                  return handleTipoCliente(telefone, texto, sessao);
+    case 'aguardando_para_quem':                     return handleParaQuem(telefone, texto, sessao);
+    case 'aguardando_cpf':                           return handleCPF(telefone, texto, sessao);
+    case 'aguardando_cpf_novo':                      return handleCPFNovo(telefone, texto, sessao);
+    case 'aguardando_nome_novo':                     return handleNomeNovo(telefone, texto, sessao);
+    case 'aguardando_celular_novo':                  return handleCelularNovo(telefone, texto, sessao);
+    case 'aguardando_cpf_terceiro':                  return handleCPFTerceiro(telefone, texto, sessao);
+    case 'aguardando_nome_terceiro':                 return handleNomeTerceiro(telefone, texto, sessao);
+    case 'aguardando_celular_terceiro':              return handleCelularTerceiro(telefone, texto, sessao);
+    case 'aguardando_especialidade':                 return handleEspecialidade(telefone, texto, sessao);
+    case 'aguardando_periodo':                       return handlePeriodo(telefone, texto, sessao);
+    case 'aguardando_horario':                       return handleHorario(telefone, texto, sessao);
+    case 'aguardando_confirmacao':                   return handleConfirmacao(telefone, texto, sessao);
+    case 'aguardando_cancelamento':                  return handleCancelamento(telefone, texto, sessao);
+    case 'aguardando_confirmacao_cancel':            return handleConfirmacaoCancel(telefone, texto, sessao);
+    case 'aguardando_faq':                           return handleFAQ(telefone, texto);
   }
 
   if (PALAVRAS_AGRADECIMENTO.some(p => textoLower === p || textoLower.includes(p))) {
@@ -166,12 +166,6 @@ async function handleLissa(telefone, texto, sessao) {
 
   const resposta = await consultarIA(historico);
   if (!resposta) {
-    // IA indisponível — mantém estado e avisa o cliente
-    await setSessao(telefone, {
-      etapa: 'aguardando_confirmacao_agendamento_lissa',
-      historicoLissa: sessao.historicoLissa,
-      regiaoCorpo: sessao.regiaoCorpo,
-    });
     return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
   }
 
@@ -236,12 +230,21 @@ async function handleConfirmacaoLissa(telefone, texto, sessao) {
     return enviarMensagem(telefone, `Tudo bem! 😊 Foi um prazer conversar com você.\n\nEstamos aqui quando precisar. Até logo! 👋`);
   }
 
-  // Resposta ambígua — Lissa responde mas mantém estado de aguardando confirmação
+  // Resposta fora do contexto — Lissa responde e SEMPRE mantém aguardando confirmação
   const historico = sessao.historicoLissa || [];
   historico.push({ role: 'user', content: texto });
   const resposta = await consultarIA(historico);
-  if (!resposta) return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅`);
 
+  if (!resposta) {
+    await setSessao(telefone, {
+      etapa: 'aguardando_confirmacao_agendamento_lissa',
+      historicoLissa: sessao.historicoLissa,
+      regiaoCorpo: sessao.regiaoCorpo,
+    });
+    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
+  }
+
+  // Remove TODAS as tags — nunca abre menu nem encerra neste estado
   const respostaLimpa = resposta
     .replace(/\[REGIAO\s*:\s*[^\]]*\]/gi, '')
     .replace(/\[OFERECER_AGENDAMENTO\]/gi, '')
@@ -252,7 +255,7 @@ async function handleConfirmacaoLissa(telefone, texto, sessao) {
   const regiao = extrairRegiao(resposta);
   historico.push({ role: 'assistant', content: resposta });
 
-  // Mantém estado de aguardando confirmação independente do que a Lissa responder
+  // SEMPRE mantém estado aguardando confirmação — ignora qualquer tag da IA
   await setSessao(telefone, {
     etapa: 'aguardando_confirmacao_agendamento_lissa',
     historicoLissa: historico,
