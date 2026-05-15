@@ -165,7 +165,15 @@ async function handleLissa(telefone, texto, sessao) {
   historico.push({ role: 'user', content: texto });
 
   const resposta = await consultarIA(historico);
-  if (!resposta) return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅\n\n${CONTATO_HUMANO}`);
+  if (!resposta) {
+    // IA indisponível — mantém estado e avisa o cliente
+    await setSessao(telefone, {
+      etapa: 'aguardando_confirmacao_agendamento_lissa',
+      historicoLissa: sessao.historicoLissa,
+      regiaoCorpo: sessao.regiaoCorpo,
+    });
+    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
+  }
 
   const regiao = extrairRegiao(resposta);
   const ofereceAgendamento = resposta.includes('[OFERECER_AGENDAMENTO]');
