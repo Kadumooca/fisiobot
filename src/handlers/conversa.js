@@ -228,8 +228,30 @@ async function handleConfirmacaoLissa(telefone, texto, sessao) {
     return enviarMensagem(telefone, `Tudo bem! 😊 Foi um prazer conversar com você.\n\nEstamos aqui quando precisar. Até logo! 👋`);
   }
 
-  // Resposta ambígua — passa de volta para a Lissa
-  return handleLissa(telefone, texto, sessao);
+  // Resposta ambígua — Lissa responde mas mantém estado de aguardando confirmação
+  const historico = sessao.historicoLissa || [];
+  historico.push({ role: 'user', content: texto });
+  const resposta = await consultarIA(historico);
+  if (!resposta) return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅`);
+
+  const respostaLimpa = resposta
+    .replace(/\[REGIAO\s*:\s*[^\]]*\]/gi, '')
+    .replace(/\[OFERECER_AGENDAMENTO\]/gi, '')
+    .replace(/\[ENCERRAR\]/gi, '')
+    .replace(/\[ABRIR_MENU\]/gi, '')
+    .trim();
+
+  const regiao = extrairRegiao(resposta);
+  historico.push({ role: 'assistant', content: resposta });
+
+  // Mantém estado de aguardando confirmação independente do que a Lissa responder
+  await setSessao(telefone, {
+    etapa: 'aguardando_confirmacao_agendamento_lissa',
+    historicoLissa: historico,
+    regiaoCorpo: regiao || sessao.regiaoCorpo || null,
+  });
+
+  return enviarMensagem(telefone, respostaLimpa);
 }
 
 async function handleMenu(telefone, texto, sessao) {
