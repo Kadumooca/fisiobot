@@ -13,20 +13,10 @@ const {
 const CONTATO_HUMANO = `Caso prefira falar diretamente com nossa equipe:\n📞 (11) 2268-3195\n💬 WhatsApp: (11) 98728-1427\n\nHorário: Segunda a Sexta, 7h às 20h 😊`;
 const ENDERECO = `📍 *Clínica Lituânia*\nRua Lituânia, 209 - Mooca\nCEP 03184-020 - São Paulo/SP\n📞 (11) 2268-3195`;
 
-const MENU_PRINCIPAL = `━━━━━━━━━━━━━━━━━━
-🏥 *Clínica Lituânia*
-━━━━━━━━━━━━━━━━━━
+const MENU_PRINCIPAL = `1️⃣  📅 Agendar consulta
+2️⃣  👤 Falar com a Recepção
 
-Como posso te ajudar? 😊
-
-1️⃣  📅 Agendar consulta
-2️⃣  ❌ Cancelar agendamento
-3️⃣  ❓ Dúvidas frequentes
-4️⃣  👤 Falar com a Recepção
-
-0️⃣  🔚 Encerrar atendimento
-━━━━━━━━━━━━━━━━━━
-_Digite o número da opção_`;
+0️⃣  🔚 Encerrar`;
 
 const PALAVRAS_AGRADECIMENTO = [
   'obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks',
@@ -219,16 +209,10 @@ async function handleMenu(telefone, texto, sessao) {
       await setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: sessao.regiaoCorpo });
       return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim\n*2.* 🆕 Não, sou novo paciente\n\n_ou *0* para encerrar_`);
     case '2':
-      await setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'cancelar' });
-      return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim\n*2.* 🆕 Sou novo\n\n_ou *0* para encerrar_`);
-    case '3':
-      await setSessao(telefone, { etapa: 'aguardando_faq' });
-      return enviarMensagem(telefone, `❓ *Dúvidas Frequentes*\n\n${listarFAQs()}\n\nDigite o número ou *0* para encerrar.`);
-    case '4':
       await setSessao(telefone, { etapa: 'atendimento_humano' });
       return enviarMensagem(telefone, `Certo! 😊 Em breve um de nossos atendentes entrará em contato.\n\nAté logo! 👋`);
     default:
-      return enviarMensagem(telefone, `Por favor, digite uma opção válida:\n\n${MENU_PRINCIPAL}`);
+      return enviarMensagem(telefone, `Por favor, digite *1* para agendar ou *2* para falar com a recepção.`);
   }
 }
 
