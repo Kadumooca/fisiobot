@@ -129,6 +129,10 @@ async function consultarIA(historico) {
       }),
     });
     const data = await response.json();
+    if (!data.choices) {
+      console.error('Resposta Groq sem choices:', JSON.stringify(data));
+      return null;
+    }
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
     console.error('Erro ao consultar IA:', err.message);
