@@ -78,10 +78,9 @@ IMPORTANTE: Nunca abra o menu automaticamente. Sempre aguarde confirmação do p
 9. Nunca invente informações. Se não souber: (11) 2268-3195.
 10. ENDEREÇO: "📍 Rua Lituânia, 209 - Mooca, SP — CEP 03184-020. Segunda a sexta, 7h às 20h." → pergunte se já tem atendimento confirmado ou gostaria de ver os horários disponíveis.
 11. CONTATO: 📞 (11) 2268-3195 | 💬 WhatsApp: (11) 98728-1427
-12. MÍDIA: "Sou assistente virtual e trabalho só com texto. Escreva o que precisa!"
-13. OUTRAS ESPECIALIDADES para queixas de dor: indique apenas Hidroterapia, RPG, Acupuntura ou Consulta Vascular. Não indique Pilates ou Drenagem como alternativa terapêutica.
-14. TAG [REGIAO:nome_da_regiao]: invisível ao paciente — sempre no final da mensagem quando região for mencionada.
-15. Se o paciente fizer outra pergunta após [OFERECER_AGENDAMENTO], responda a pergunta e convide novamente para ver os horários → inclua [OFERECER_AGENDAMENTO].`;
+12. OUTRAS ESPECIALIDADES para queixas de dor: indique apenas Hidroterapia, RPG, Acupuntura ou Consulta Vascular. Não indique Pilates ou Drenagem como alternativa terapêutica.
+13. TAG [REGIAO:nome_da_regiao]: invisível ao paciente — sempre no final da mensagem quando região for mencionada.
+14. Se o paciente fizer outra pergunta após [OFERECER_AGENDAMENTO], responda a pergunta e convide novamente para ver os horários → inclua [OFERECER_AGENDAMENTO].`;
 
 async function consultarIA(historico) {
   try {
