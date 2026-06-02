@@ -289,17 +289,13 @@ async function handleRespostaLissa(telefone, texto, sessao) {
   return enviarMensagem(telefone, respostaLimpa);
 }
 
-async function handleMenu(telefone, texto, sessao) {
-  switch (texto) {
-    case '1':
-      await setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: sessao.regiaoCorpo });
-      return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim\n*2.* 🆕 Não, sou novo paciente\n\n_ou *0* para encerrar_`);
-    case '2':
-      await setSessao(telefone, { etapa: 'atendimento_humano' });
-      return enviarMensagem(telefone, `Certo! 😊 Em breve um de nossos atendentes entrará em contato.\n\nAté logo! 👋`);
-    default:
-      return enviarMensagem(telefone, `Digite *1* para agendar ou *2* para falar com a recepção.\n\n${MENU}`);
-  }
+async function iniciarAgendamento(telefone, cliente, regiaoCorpo) {
+  await setSessao(telefone, { etapa: 'aguardando_especialidade', cliente, regiaoCorpo });
+  return enviarMensagem(telefone,
+    `Para qual especialidade? 😊\n\n` +
+    `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
+    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem\n\n_ou *0* para encerrar_`
+  );
 }
 
 async function handleTipoCliente(telefone, texto, sessao) {
