@@ -13,9 +13,9 @@ const {
 const CONTATO_HUMANO = `📞 (11) 2268-3195\n💬 WhatsApp: (11) 98728-1427\n\nHorário: Segunda a Sexta, 7h às 20h`;
 const ENDERECO = `📍 *Clínica Lituânia*\nRua Lituânia, 209 - Mooca\nCEP 03184-020 - São Paulo/SP\n📞 (11) 2268-3195`;
 
-const MENU = `1️⃣  📅 Agendar consulta
-2️⃣  👤 Falar com a Recepção
-0️⃣  🔚 Encerrar`;
+const MENU = `1️⃣ 📅 Ver horários disponíveis
+2️⃣ 👤 Falar com a recepção
+0️⃣ 🔚 Encerrar`;
 
 const PALAVRAS_AGRADECIMENTO = [
   'obrigado', 'obrigada', 'brigado', 'brigada', 'valeu', 'thanks',
@@ -202,14 +202,55 @@ async function handleLissa(telefone, texto, sessao) {
 async function handleRespostaLissa(telefone, texto, sessao) {
   const textoLower = texto.toLowerCase().trim();
 
-  const ehSim = ['sim', 's', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos', 'pode ser',
-    'quero sim', 'com certeza', 'gostaria', 'aceito', 'topo', 'vamos lá', 'por favor'
-  ].some(p => textoLower === p || textoLower.includes(p));
+ const ehSim = [
+  'sim',
+  'claro',
+  'pode',
+  'quero',
+  'yes',
+  'ok',
+  'vamos',
+  'pode ser',
+  'quero sim',
+  'gostaria',
+  'aceito',
+  'topo',
+  'vamos lá',
+  'por favor',
+  'quero marcar',
+  'quero agendar',
+  'quero avaliação',
+  'quero uma avaliação',
+  'tem horário',
+  'quais horários',
+  'quero ver horários',
+  'pode verificar',
+  'pode consultar',
+  'mostrar horários'
+].some(p =>
+  textoLower === p ||
+  textoLower.includes(p)
+);
 
-  const ehNao = ['não', 'nao', 'n', 'agora não', 'agora nao', 'depois', 'talvez',
-    'por enquanto não', 'por enquanto nao', 'não quero', 'nao quero', 'dispenso',
-    'não preciso', 'nao preciso'
-  ].some(p => textoLower === p || textoLower.includes(p));
+  const ehNao = [
+'não',
+'nao',
+'n',
+'agora não',
+'agora nao',
+'depois',
+'talvez',
+'por enquanto não',
+'por enquanto nao',
+'não quero',
+'nao quero',
+'dispenso',
+'não preciso',
+'nao preciso',
+'vou pensar',
+'deixa eu pensar',
+'mais tarde'
+].some(p => textoLower.includes(p));
 
   if (ehSim && !ehNao) {
     await setSessao(telefone, {
