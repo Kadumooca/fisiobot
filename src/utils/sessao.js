@@ -13,8 +13,21 @@ const cache = new Map();
 async function getSessao(telefone) {
   if (cache.has(telefone)) return cache.get(telefone);
   try {
-    const res = await pool.query('SELECT dados FROM sessoes WHERE telefone = $1', [telefone]);
-    const dados = res.rows[0]?.dados || { etapa: 'encerrado' };
+    const res = await pool.query('SELECT dados, atualizado_em FROM sessoes WHERE telefone = $1', [telefone]);
+    if (!res.rows[0]) return { etapa: 'encerrado' };
+
+    const dados = res.rows[0].dados || { etapa: 'encerrado' };
+    const atualizadoEm = new Date(res.rows[0].atualizado_em);
+    const agora = new Date();
+    const horas = (agora - atualizadoEm) / 1000 / 60 / 60;
+
+    // Após 3 horas de inatividade — reinicia como nova conversa
+    if (horas >= 3) {
+      const novaSessao = { etapa: 'encerrado' };
+      cache.set(telefone, novaSessao);
+      return novaSessao;
+    }
+
     cache.set(telefone, dados);
     return dados;
   } catch (err) {
