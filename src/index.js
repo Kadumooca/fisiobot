@@ -24,7 +24,16 @@ const timeouts = new Map();
 const ultimaMensagemNossa = new Map();
 const mensagensPendentes = new Map();
 const TRINTA_MIN = 30 * 60 * 1000;
+const QUINZE_MIN = 15 * 60 * 1000;
 const PALAVRAS_ATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
+
+// Padrões que indicam encerramento pela recepção
+const PADROES_ENCERRAMENTO_RECEPCAO = [
+  '👋', 'até logo', 'ate logo', 'até mais', 'ate mais', 'tchau', 'flw',
+  'boa sessão', 'boa sessao', 'obrigado', 'obrigada', 'foi ótimo',
+  'foi otimo', 'até breve', 'ate breve', 'tenha um bom dia',
+  'até a próxima', 'ate a proxima'
+];
 
 function limparTimeouts(telefone) {
   if (timeouts.has(telefone)) {
@@ -34,32 +43,25 @@ function limparTimeouts(telefone) {
   }
 }
 
-function agendarTimeoutHumano(telefone) {
-  limparTimeouts(telefone);
-  const th = setTimeout(() => {
-    getSessao(telefone).then(s => {
-      if (s.etapa === 'atendimento_humano') setSessao(telefone, { etapa: 'encerrado' });
-    });
-  }, 60 * 60 * 1000);
-  timeouts.set(telefone, { th });
-}
-
+// Atendimento humano: sem timeout — recepção encerra quando quiser
 function agendarTimeoutsInatividade(telefone) {
   limparTimeouts(telefone);
 
+  // Aviso após 15min sem interação (somente conversas em andamento)
   const t1 = setTimeout(async () => {
     const s = await getSessao(telefone);
     if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
     await enviarMensagem(telefone, `Ainda está por aí? 😊 Estou aqui caso queira continuar!`);
-  }, 20 * 60 * 1000);
+  }, QUINZE_MIN);
 
+  // Encerra após 30min sem interação
   const t2 = setTimeout(async () => {
     const s = await getSessao(telefone);
     if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
     await enviarMensagem(telefone, `Tudo bem! 😊 Vou encerrar por agora.\n\nQuando quiser retomar é só nos chamar com um *Olá*!`);
     await setSessao(telefone, { etapa: 'encerrado' });
     limparTimeouts(telefone);
-  }, 40 * 60 * 1000);
+  }, 30 * 60 * 1000);
 
   timeouts.set(telefone, { t1, t2 });
 }
@@ -70,22 +72,43 @@ function detectarMidia(body) {
     msg?.documentMessage || msg?.stickerMessage || msg?.voiceMessage || msg?.pttMessage);
 }
 
+function detectarEncerramentoRecepcao(texto) {
+  if (!texto) return false;
+  const lower = texto.toLowerCase().trim();
+  return PADROES_ENCERRAMENTO_RECEPCAO.some(p => lower.includes(p));
+}
+
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
     const telefone = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
 
-    if (NUMEROS_INTERNOS.has(telefone)) return res.sendStatus(200);
+    // Números internos (profissionais da clínica): bot sempre silenciado
+    if (NUMEROS_INTERNOS.has(telefone)) {
+      console.log(`[INTERNO IGNORADO] ${telefone}`);
+      return res.sendStatus(200);
+    }
 
-    // Mensagem enviada pelo WhatsApp da clínica (atendente humano, não o bot)
+    // Mensagem enviada pelo WhatsApp da clínica (recepção ou bot)
     if (body.data?.key?.fromMe) {
-      // Só registra se for mensagem digitada por humano (não pelo bot via API)
       const idMensagem = body.data?.key?.id || '';
       const ehMensagemBot = idMensagem.startsWith('BAE') || idMensagem.startsWith('3EB');
+
       if (!ehMensagemBot) {
+        // Mensagem humana enviada pela recepção
         ultimaMensagemNossa.set(telefone, Date.now());
         console.log(`[HUMANO] Mensagem nossa para ${telefone}`);
+
+        // Se recepção encerrou com padrão de despedida → encerra sessão
+        const textoEnviado = body.data?.message?.conversation ||
+                             body.data?.message?.extendedTextMessage?.text || '';
+        if (detectarEncerramentoRecepcao(textoEnviado)) {
+          await marcarNaoReativar(telefone);
+          await setSessao(telefone, { etapa: 'encerrado' });
+          limparTimeouts(telefone);
+          console.log(`[ENCERRADO] Recepção encerrou conversa com ${telefone}`);
+        }
       }
       return res.sendStatus(200);
     }
@@ -112,8 +135,18 @@ app.post('/webhook', async (req, res) => {
       }
     }
 
+    // Conversa encerrada: só reativa com palavra-chave
+    if (sessao.etapa === 'encerrado') {
+      if (!ePalavraAtivacao) {
+        console.log(`[SILENCIADO] ${telefone} - conversa encerrada, aguardando palavra-chave`);
+        return res.sendStatus(200);
+      }
+      await setSessao(telefone, { etapa: 'conversando_lissa' });
+    }
+
+    // Atendimento humano: bot silenciado, recepção conduz sem timeout
     if (sessao.etapa === 'atendimento_humano') {
-      agendarTimeoutHumano(telefone);
+      console.log(`[HUMANO ATIVO] ${telefone} - bot silenciado, recepção conduz`);
       return res.sendStatus(200);
     }
 
@@ -121,8 +154,7 @@ app.post('/webhook', async (req, res) => {
       if (sessao.etapa === 'encerrado') return res.sendStatus(200);
       limparTimeouts(telefone);
       await setSessao(telefone, { etapa: 'atendimento_humano' });
-      agendarTimeoutHumano(telefone);
-      await enviarMensagem(telefone, `Recebi sua mídia! 😊 Um atendente dará continuidade em breve. Por favor aguarde! 🙏`);
+      await enviarMensagem(telefone, `Recebi sua mídia! 😊 Estamos transferindo seu contato para a recepção, que dará continuidade ao atendimento em breve. Por favor aguarde! 🙏`);
       return res.sendStatus(200);
     }
 
@@ -149,8 +181,9 @@ app.post('/webhook', async (req, res) => {
         console.error(`Erro processarMensagem ${telefone}:`, err.message);
       }
       const s = await getSessao(telefone);
-      if (s.etapa === 'atendimento_humano') agendarTimeoutHumano(telefone);
-      else if (!['encerrado'].includes(s.etapa)) agendarTimeoutsInatividade(telefone);
+      if (!['encerrado', 'atendimento_humano'].includes(s.etapa)) {
+        agendarTimeoutsInatividade(telefone);
+      }
     }, 2000);
 
     mensagensPendentes.get(telefone).timer = timer;
