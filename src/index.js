@@ -173,15 +173,8 @@ app.post('/webhook', async (req, res) => {
       if (!pendente) return;
       mensagensPendentes.delete(telefone);
       const textoFinal = pendente.textos.join('\n');
-     console.log(`Mensagem de ${telefone}: ${textoFinal}`);
-console.log('ANTES PROCESSAR');
+      console.log(`Mensagem de ${telefone}: ${textoFinal}`);
 
-try {
-  await processarMensagem(telefone, textoFinal);
-  console.log('DEPOIS PROCESSAR');
-} catch (err) {
-  console.error('ERRO PROCESSAR:', err);
-}
       limparTimeouts(telefone);
       try {
         await processarMensagem(telefone, textoFinal);
