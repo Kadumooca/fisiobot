@@ -152,33 +152,36 @@ async function marcarRespondeuRemarketing(telefone) {
 async function buscarLeadsParaReativar() {
   try {
     const resultado = [];
+    // Dia 3: primeira tentativa de reativação
     const r1 = await pool.query(`
       SELECT telefone, nome, especialidade, tentativas_reativacao FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 0
-      AND ultima_mensagem_em < NOW() - INTERVAL '2 hours'
-      AND ultima_mensagem_em > NOW() - INTERVAL '3 hours'
+      AND ultima_mensagem_em < NOW() - INTERVAL '3 days'
+      AND ultima_mensagem_em > NOW() - INTERVAL '4 days'
     `);
     r1.rows.forEach(r => resultado.push({ ...r, tentativa: 1 }));
 
+    // Dia 6: segunda tentativa de reativação
     const r2 = await pool.query(`
       SELECT telefone, nome, especialidade, tentativas_reativacao FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 1
-      AND ultima_mensagem_em < NOW() - INTERVAL '24 hours'
-      AND ultima_mensagem_em > NOW() - INTERVAL '25 hours'
+      AND ultima_mensagem_em < NOW() - INTERVAL '6 days'
+      AND ultima_mensagem_em > NOW() - INTERVAL '7 days'
     `);
     r2.rows.forEach(r => resultado.push({ ...r, tentativa: 2 }));
 
+    // Dia 9: terceira e última tentativa — depois disso, para definitivamente
     const r3 = await pool.query(`
       SELECT telefone, nome, especialidade, tentativas_reativacao FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND status NOT IN ('nao_reativar', 'humano', 'agendou')
       AND tentativas_reativacao = 2
-      AND ultima_mensagem_em < NOW() - INTERVAL '48 hours'
-      AND ultima_mensagem_em > NOW() - INTERVAL '49 hours'
+      AND ultima_mensagem_em < NOW() - INTERVAL '9 days'
+      AND ultima_mensagem_em > NOW() - INTERVAL '10 days'
     `);
     r3.rows.forEach(r => resultado.push({ ...r, tentativa: 3 }));
 
