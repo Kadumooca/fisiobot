@@ -1,9 +1,8 @@
-const { getSessao, setSessao, resetarSessao } = require('../utils/sessao');
+const { getSessao, setSessao } = require('../utils/sessao');
 const { enviarMensagem } = require('../services/whatsapp');
 const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
-const { validarCPF, limparCPF, formatarCPF } = require('../utils/formatters');
-const { listarFAQs, buscarResposta } = require('../utils/faq');
+const { validarCPF, limparCPF } = require('../utils/formatters');
 const {
   buscarClientePorTelefone, salvarClientePorTelefone,
   registrarLead, registrarConversa, marcarAgendou,
@@ -312,7 +311,7 @@ async function handleCPF(telefone, texto, sessao) {
   await enviarMensagem(telefone, '🔍 Buscando seus dados...');
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (!cliente) return enviarMensagem(telefone, `❌ CPF não encontrado.\n\n${CONTATO_HUMANO}`);
-  salvarClientePorTelefone(telefone, cliente);
+  await salvarClientePorTelefone(telefone, cliente);
   if (sessao.acao === 'agendar') {
     await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
     return enviarMensagem(telefone, `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
@@ -339,7 +338,7 @@ async function handleCelularNovo(telefone, texto, sessao) {
   const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo, Celular: celular, Email: '', Sexo: '' });
   if (!id) return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
   const cliente = { Id: id, Nome: sessao.nomeNovo };
-  salvarClientePorTelefone(telefone, cliente);
+  await salvarClientePorTelefone(telefone, cliente);
   await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
   await enviarMensagem(telefone, `✅ Cadastro criado, *${sessao.nomeNovo}*! 🎉`);
   return enviarMensagem(telefone, `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
