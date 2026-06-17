@@ -2,10 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { buscarEstatisticas } = require('../utils/clienteCache');
 
-const USUARIO = 'admin';
-const SENHA = 'Caduco209$';
+const USUARIO = process.env.DASHBOARD_USER;
+const SENHA = process.env.DASHBOARD_PASS;
 
 function autenticar(req, res, next) {
+  if (!USUARIO || !SENHA) {
+    console.error('Dashboard: DASHBOARD_USER ou DASHBOARD_PASS não configurados.');
+    return res.status(500).send('Dashboard não configurado.');
+  }
   const auth = req.headers.authorization;
   if (!auth) {
     res.set('WWW-Authenticate', 'Basic realm="FisioBot Dashboard"');
