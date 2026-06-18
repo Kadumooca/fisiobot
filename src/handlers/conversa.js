@@ -217,7 +217,11 @@ async function handleRespostaLissa(telefone, texto, sessao) {
     'quero sim', 'gostaria', 'aceito', 'topo', 'vamos lá', 'por favor',
     'quero marcar', 'quero agendar', 'quero avaliação', 'quero uma avaliação',
     'tem horário', 'quais horários', 'quero ver horários', 'pode verificar',
-    'pode consultar', 'mostrar horários'
+    'pode consultar', 'mostrar horários', 'ver horários', 'ver horário',
+    'horários disponíveis', 'horarios disponiveis', 'ver disponibilidade',
+    'disponibilidade', 'ver os horários', 'mostra os horários',
+    'mostre os horários', 'manda os horários', 'me manda os horários',
+    'passa os horários', 'passar os horários', 'quero ver', 'ver opções'
   ].some(p => textoLower === p || textoLower.includes(p));
 
   const ehNao = [
