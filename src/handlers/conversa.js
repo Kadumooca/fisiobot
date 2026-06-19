@@ -224,11 +224,18 @@ async function handleRespostaLissa(telefone, texto, sessao) {
     'passa os horários', 'passar os horários', 'quero ver', 'ver opções'
   ].some(p => textoLower === p || textoLower.includes(p));
 
-  const ehNao = [
-    'não', 'nao', 'n', 'agora não', 'agora nao', 'depois', 'talvez',
+  // Tokens curtos (1-2 letras) só podem ser comparados por igualdade exata,
+  // nunca por .includes() — senão "n" combina com qualquer palavra que contenha
+  // a letra "n" (ex: "convênios"), causando falso positivo de recusa.
+  const PALAVRAS_NAO_EXATAS = ['não', 'nao', 'n'];
+  const FRASES_NAO = [
+    'agora não', 'agora nao', 'depois', 'talvez',
     'por enquanto não', 'por enquanto nao', 'não quero', 'nao quero',
     'dispenso', 'não preciso', 'nao preciso', 'vou pensar', 'deixa eu pensar', 'mais tarde'
-  ].some(p => textoLower.includes(p));
+  ];
+
+  const ehNao = PALAVRAS_NAO_EXATAS.some(p => textoLower === p) ||
+    FRASES_NAO.some(p => textoLower.includes(p));
 
   if (ehSim && !ehNao) {
     await setSessao(telefone, {
