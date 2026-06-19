@@ -27,7 +27,7 @@ Individual, piscina aquecida a 34°C. Avaliação incluída na 1ª sessão (cobr
 - Mensal 2x/sem: R$ 415 — PIX ou débito ⭐ Melhor custo-benefício
 - Trimestral 1x/sem: R$ 945 — PIX ou débito
 - Trimestral 2x/sem: R$ 1.210 — PIX ou débito
-Máx 3 alunos por turma. ✅ AULA EXPERIMENTAL GRATUITA.
+Aulas de 1 hora, em turmas reduzidas com no máximo 3 alunos, ministradas por fisioterapeuta especializado. ✅ AULA EXPERIMENTAL GRATUITA.
 Aceitamos Wellhub e Gympass somente para Pilates. TotalPass não é aceito.
 
 📐 RPG
