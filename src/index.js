@@ -3,7 +3,7 @@ const express = require('express');
 const { processarMensagem } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
-const { enviarMensagem } = require('./services/whatsapp');
+const { enviarMensagem, ehMensagemDoBot } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
 const { marcarNaoReativar } = require('./utils/clienteCache');
 const dashboardRouter = require('./routes/dashboard');
@@ -93,21 +93,28 @@ app.post('/webhook', async (req, res) => {
     // Mensagem enviada pelo WhatsApp da clínica (recepção ou bot)
     if (body.data?.key?.fromMe) {
       const idMensagem = body.data?.key?.id || '';
-      const ehMensagemBot = idMensagem.startsWith('BAE') || idMensagem.startsWith('3EB');
+      const ehMensagemBot = ehMensagemDoBot(idMensagem);
 
       if (!ehMensagemBot) {
         // Mensagem humana enviada pela recepção
         ultimaMensagemNossa.set(telefone, Date.now());
         console.log(`[HUMANO] Mensagem nossa para ${telefone}`);
 
-        // Se recepção encerrou com padrão de despedida → encerra sessão
         const textoEnviado = body.data?.message?.conversation ||
                              body.data?.message?.extendedTextMessage?.text || '';
+
         if (detectarEncerramentoRecepcao(textoEnviado)) {
+          // Recepção se despediu → encerra, paciente pode reativar com "Olá"
           await marcarNaoReativar(telefone);
           await setSessao(telefone, { etapa: 'encerrado' });
           limparTimeouts(telefone);
           console.log(`[ENCERRADO] Recepção encerrou conversa com ${telefone}`);
+        } else {
+          // Qualquer outra mensagem manual da recepção assume a conversa:
+          // o bot fica silenciado até a recepção encerrar explicitamente.
+          await setSessao(telefone, { etapa: 'atendimento_humano' });
+          limparTimeouts(telefone);
+          console.log(`[ASSUMIDO] Recepção assumiu conversa com ${telefone}`);
         }
       }
       return res.sendStatus(200);
