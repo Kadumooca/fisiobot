@@ -282,8 +282,41 @@ async function handleMenu(telefone, texto, sessao) {
     case '2':
       return transferirParaRecepcao(telefone);
     default:
+      // Se não for um número de menu (ex: o paciente fez uma pergunta), manda pra Lissa responder
+      if (!/^\d+$/.test(texto.trim())) {
+        return handleMenuPergunta(telefone, texto, sessao);
+      }
       return enviarMensagem(telefone, `Digite *1* para ver horários ou *2* para falar com a recepção.\n\n${MENU}`);
   }
+}
+
+async function handleMenuPergunta(telefone, texto, sessao) {
+  const historico = sessao.historicoLissa || [];
+  historico.push({ role: 'user', content: texto });
+
+  const resposta = await consultarIA(historico);
+  if (!resposta) {
+    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
+  }
+
+  const encerrar = resposta.includes('[ENCERRAR]');
+  const respostaLimpa = limparIA(resposta);
+  historico.push({ role: 'assistant', content: resposta });
+
+  if (encerrar) {
+    await marcarNaoReativar(telefone);
+    await setSessao(telefone, { etapa: 'encerrado' });
+    return enviarMensagem(telefone, respostaLimpa);
+  }
+
+  await setSessao(telefone, {
+    etapa: 'aguardando_menu',
+    historicoLissa: historico,
+    regiaoCorpo: sessao.regiaoCorpo,
+  });
+
+  await enviarMensagem(telefone, respostaLimpa);
+  return enviarMensagem(telefone, MENU);
 }
 
 async function handleTipoCliente(telefone, texto, sessao) {
