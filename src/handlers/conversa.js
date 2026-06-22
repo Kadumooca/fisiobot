@@ -66,6 +66,9 @@ const AGENDAS = {
   '7': { nome: 'Drenagem / Massagem', periodos: [
     { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
   ]},
+  '8': { nome: 'Home Care', diasBusca: 7, periodos: [
+    { label: '📋 Ver horários disponíveis', agendaId: 32, procedimentoId: 101, idProfissional: 31, agendaNome: 'Home Care - Domiciliar' },
+  ]},
 };
 
 function formatarData(date) {
@@ -423,13 +426,13 @@ async function iniciarAgendamento(telefone, cliente, regiaoCorpo) {
   return enviarMensagem(telefone,
     `Para qual especialidade? 😊\n\n` +
     `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
-    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem\n\n_ou *0* para encerrar_`
+    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem\n*8.* 🏠 Home Care (Domiciliar)\n\n_ou *0* para encerrar_`
   );
 }
 
 async function handleEspecialidade(telefone, texto, sessao) {
   const esp = AGENDAS[texto];
-  if (!esp) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
+  if (!esp) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 8.`);
   await registrarLead(telefone, sessao.cliente?.Nome, esp.nome);
   if (esp.periodos.length === 1) return buscarMostrarHorarios(telefone, sessao.cliente, esp.periodos[0], esp.diasBusca || 7, esp, sessao.regiaoCorpo);
   const lista = esp.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
@@ -531,6 +534,13 @@ async function handleConfirmacao(telefone, texto, sessao) {
       `📋 *Orientações:*\n\n📁 Traga *exames* e *encaminhamento médico* (se houver)\n` +
       `👕 Vista *roupa leve para ginástica*\n` +
       `⏱️ Sessão individual de *1 hora*, *1x por semana*`
+    );
+  } else if (nome.includes('HOME CARE')) {
+    await enviarMensagem(telefone,
+      `📋 *Orientações:*\n\n🏠 Atendimento realizado na sua residência\n` +
+      `🧰 Levamos todo o material necessário para a sessão\n` +
+      `⏱️ Sessão de *1 hora*\n` +
+      `📄 Fornecemos documentação completa para reembolso no plano de saúde`
     );
   } else {
     await enviarMensagem(telefone,
