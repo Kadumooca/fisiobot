@@ -104,7 +104,7 @@ app.post('/webhook', async (req, res) => {
                              body.data?.message?.extendedTextMessage?.text || '';
 
         if (detectarEncerramentoRecepcao(textoEnviado)) {
-          // Recepção se despediu → encerra, paciente pode reativar com "Olá"
+          // Recepção se despediu → encerra, paciente pode reativar com qualquer mensagem
           await marcarNaoReativar(telefone);
           await setSessao(telefone, { etapa: 'encerrado' });
           limparTimeouts(telefone);
@@ -127,27 +127,19 @@ app.post('/webhook', async (req, res) => {
     const tempoNossa = ultimaMensagemNossa.get(telefone);
     const tempoDesde = tempoNossa ? (Date.now() - tempoNossa) : Infinity;
     const textoLower = (mensagem || '').toLowerCase().trim();
-    const ePalavraAtivacao = PALAVRAS_ATIVACAO.some(p => textoLower === p);
 
     if (tempoNossa) {
       if (tempoDesde < TRINTA_MIN) {
         console.log(`[BLOQUEADO] ${telefone} - dentro de 30min (${Math.round(tempoDesde/60000)}min atrás)`);
         return res.sendStatus(200);
       }
-      if (tempoDesde >= TRINTA_MIN && ePalavraAtivacao) {
-        ultimaMensagemNossa.delete(telefone);
-      } else if (tempoDesde >= TRINTA_MIN && !ePalavraAtivacao) {
-        console.log(`[BLOQUEADO] ${telefone} - sem palavra de ativação`);
-        return res.sendStatus(200);
-      }
+      // Passou 30min: libera independente da mensagem
+      ultimaMensagemNossa.delete(telefone);
     }
 
-    // Conversa encerrada: só reativa com palavra-chave
+    // Conversa encerrada: qualquer mensagem reativa o bot
     if (sessao.etapa === 'encerrado') {
-      if (!ePalavraAtivacao) {
-        console.log(`[SILENCIADO] ${telefone} - conversa encerrada, aguardando palavra-chave`);
-        return res.sendStatus(200);
-      }
+      console.log(`[REATIVADO] ${telefone} - nova mensagem reativou o bot`);
       await setSessao(telefone, { etapa: 'conversando_lissa' });
     }
 
