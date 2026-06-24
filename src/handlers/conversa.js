@@ -460,7 +460,7 @@ async function handleHorario(telefone, texto, sessao) {
   const i = parseInt(texto) - 1;
   if (isNaN(i) || i < 0 || i >= sessao.horarios.length) return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horarios.length}.`);
   const h = sessao.horarios[i];
-  await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario: h });
+  await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario: h, agenda: sessao.agenda, cliente: sessao.cliente, especialidade: sessao.especialidade });
   return enviarMensagem(telefone,
     `📋 *Confirme o agendamento:*\n\n` +
     `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agenda.agendaNome}\n` +
