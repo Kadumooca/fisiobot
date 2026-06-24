@@ -1,5 +1,5 @@
 const axios = require('axios');
-const pool = require('./utils/db');
+const pool = require('../utils/db');
 
 // Cache em memória para IDs recentes (evita consulta ao banco para mensagens novas)
 const idsEnviadosPeloBot = new Set();
