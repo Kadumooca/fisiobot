@@ -127,6 +127,7 @@ app.post('/webhook', async (req, res) => {
     const tempoNossa = ultimaMensagemNossa.get(telefone);
     const tempoDesde = tempoNossa ? (Date.now() - tempoNossa) : Infinity;
     const textoLower = (mensagem || '').toLowerCase().trim();
+    const ePalavraAtivacao = PALAVRAS_ATIVACAO.some(p => textoLower === p);
 
     if (tempoNossa) {
       if (tempoDesde < TRINTA_MIN) {
@@ -137,9 +138,14 @@ app.post('/webhook', async (req, res) => {
       ultimaMensagemNossa.delete(telefone);
     }
 
-    // Conversa encerrada: qualquer mensagem reativa o bot
+    // Conversa encerrada: só reativa com palavra-chave
+    // (evita que respostas como "Ok", "Confirmado" a lembretes manuais reativem o bot)
     if (sessao.etapa === 'encerrado') {
-      console.log(`[REATIVADO] ${telefone} - nova mensagem reativou o bot`);
+      if (!ePalavraAtivacao) {
+        console.log(`[SILENCIADO] ${telefone} - conversa encerrada, aguardando palavra-chave`);
+        return res.sendStatus(200);
+      }
+      console.log(`[REATIVADO] ${telefone} - palavra-chave recebida`);
       await setSessao(telefone, { etapa: 'conversando_lissa' });
     }
 
