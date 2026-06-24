@@ -93,7 +93,7 @@ app.post('/webhook', async (req, res) => {
     // Mensagem enviada pelo WhatsApp da clínica (recepção ou bot)
     if (body.data?.key?.fromMe) {
       const idMensagem = body.data?.key?.id || '';
-      const ehMensagemBot = ehMensagemDoBot(idMensagem);
+      const ehMensagemBot = await ehMensagemDoBot(idMensagem);
 
       if (!ehMensagemBot) {
         // Mensagem humana enviada pela recepção
@@ -203,6 +203,8 @@ app.post('/webhook', async (req, res) => {
 app.get('/setup-db', async (req, res) => {
   const pool = require('./utils/db');
   try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS mensagens_bot (id_mensagem TEXT PRIMARY KEY, criado_em TIMESTAMP DEFAULT NOW())`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_mensagens_bot_criado ON mensagens_bot (criado_em)`);
     await pool.query(`CREATE TABLE IF NOT EXISTS sessoes (telefone TEXT PRIMARY KEY, dados JSONB, atualizado_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS clientes_cache (telefone TEXT PRIMARY KEY, dados JSONB, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW())`);
     await pool.query(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, telefone TEXT, nome TEXT, especialidade TEXT, status TEXT DEFAULT 'lead', etapa_encerramento TEXT, tentativas_reativacao INTEGER DEFAULT 0, criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), agendou_em TIMESTAMP, ultima_mensagem_em TIMESTAMP DEFAULT NOW())`);
