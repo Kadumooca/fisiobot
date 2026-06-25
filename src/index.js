@@ -266,6 +266,8 @@ setInterval(async () => {
   try { await executarRemarketing(); }
   catch (err) { console.error('Erro remarketing:', err); }
 }, 30 * 60 * 1000);
+
+function agendarResumoDiario() {
   const agora = new Date();
   const alvo = new Date();
   alvo.setHours(20, 0, 0, 0);
