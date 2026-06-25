@@ -110,9 +110,9 @@ app.post('/webhook', async (req, res) => {
           limparTimeouts(telefone);
           console.log(`[ENCERRADO] Recepção encerrou conversa com ${telefone}`);
         } else {
-          // Qualquer outra mensagem manual da recepção assume a conversa:
-          // o bot fica silenciado até a recepção encerrar explicitamente.
-          await setSessao(telefone, { etapa: 'atendimento_humano' });
+          // Qualquer outra mensagem manual da recepção assume a conversa.
+          // Bot fica silenciado por até 2h — depois volta para encerrado automaticamente.
+          await setSessao(telefone, { etapa: 'atendimento_humano', assumido_em: new Date().toISOString() });
           limparTimeouts(telefone);
           console.log(`[ASSUMIDO] Recepção assumiu conversa com ${telefone}`);
         }
@@ -150,7 +150,9 @@ app.post('/webhook', async (req, res) => {
     }
 
     // Atendimento humano: bot silenciado, recepção conduz sem timeout
+    // Paciente respondendo renova o timer de 2h (recepção ainda está ativa)
     if (sessao.etapa === 'atendimento_humano') {
+      await setSessao(telefone, { etapa: 'atendimento_humano', assumido_em: new Date().toISOString() });
       console.log(`[HUMANO ATIVO] ${telefone} - bot silenciado, recepção conduz`);
       return res.sendStatus(200);
     }
@@ -239,12 +241,31 @@ process.on('unhandledRejection', (reason) => {
   console.error('PROMISE REJEITADA:', reason);
 });
 
+const DUAS_HORAS = 2 * 60 * 60 * 1000;
+
+// Libera sessões atendimento_humano após 2h de inatividade (job a cada 15min)
+setInterval(async () => {
+  try {
+    const pool = require('./utils/db');
+    const limite = new Date(Date.now() - DUAS_HORAS).toISOString();
+    const { rowCount } = await pool.query(
+      `UPDATE sessoes
+       SET dados = jsonb_set(dados, '{etapa}', '"encerrado"')
+       WHERE dados->>'etapa' = 'atendimento_humano'
+       AND (dados->>'assumido_em') IS NOT NULL
+       AND (dados->>'assumido_em')::timestamptz < $1`,
+      [limite]
+    );
+    if (rowCount > 0) console.log(`[TIMEOUT] ${rowCount} sessão(ões) atendimento_humano expiradas → encerrado`);
+  } catch (err) {
+    console.error('Erro timeout atendimento_humano:', err.message);
+  }
+}, 15 * 60 * 1000);
+
 setInterval(async () => {
   try { await executarRemarketing(); }
   catch (err) { console.error('Erro remarketing:', err); }
 }, 30 * 60 * 1000);
-
-function agendarResumoDiario() {
   const agora = new Date();
   const alvo = new Date();
   alvo.setHours(20, 0, 0, 0);
