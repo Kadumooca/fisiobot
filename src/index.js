@@ -231,6 +231,18 @@ app.get('/setup-db', async (req, res) => {
   }
 });
 
+app.get('/fix-sessoes', async (req, res) => {
+  const pool = require('./utils/db');
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE sessoes SET dados = jsonb_set(dados, '{etapa}', '"encerrado"') WHERE dados->>'etapa' = 'atendimento_humano'`
+    );
+    res.json({ ok: true, liberadas: rowCount });
+  } catch (err) {
+    res.json({ ok: false, erro: err.message });
+  }
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 process.on('uncaughtException', (err) => {
