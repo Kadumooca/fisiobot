@@ -3,7 +3,7 @@ const express = require('express');
 const { processarMensagem } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
-const { enviarMensagem, ehMensagemDoBot } = require('./services/whatsapp');
+const { enviarMensagem } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
 const { marcarNaoReativar } = require('./utils/clienteCache');
 const dashboardRouter = require('./routes/dashboard');
@@ -92,31 +92,43 @@ app.post('/webhook', async (req, res) => {
 
     // Mensagem enviada pelo WhatsApp da clínica (recepção ou bot)
     if (body.data?.key?.fromMe) {
-      const idMensagem = body.data?.key?.id || '';
-      const ehMensagemBot = await ehMensagemDoBot(idMensagem);
+      const sessaoAtual = await getSessao(telefone);
 
-      if (!ehMensagemBot) {
-        // Mensagem humana enviada pela recepção
-        ultimaMensagemNossa.set(telefone, Date.now());
-        console.log(`[HUMANO] Mensagem nossa para ${telefone}`);
+      // Se a sessão está em qualquer etapa ativa do bot, a mensagem fromMe
+      // é do próprio bot — ignorar completamente, sem alterar estado.
+      const ETAPAS_BOT = [
+        'conversando_lissa', 'aguardando_menu', 'aguardando_resposta_lissa',
+        'aguardando_especialidade', 'aguardando_periodo', 'aguardando_tipo_cliente',
+        'aguardando_nome', 'aguardando_cpf', 'aguardando_horario',
+        'aguardando_confirmacao', 'aguardando_horario_busca',
+        'aguardando_para_quem', 'aguardando_nome_novo', 'aguardando_cpf_novo',
+        'aguardando_celular_novo', 'aguardando_nome_terceiro', 'aguardando_cpf_terceiro',
+        'aguardando_celular_terceiro'
+      ];
 
-        const textoEnviado = body.data?.message?.conversation ||
-                             body.data?.message?.extendedTextMessage?.text || '';
-
-        if (detectarEncerramentoRecepcao(textoEnviado)) {
-          // Recepção se despediu → encerra, paciente pode reativar com qualquer mensagem
-          await marcarNaoReativar(telefone);
-          await setSessao(telefone, { etapa: 'encerrado' });
-          limparTimeouts(telefone);
-          console.log(`[ENCERRADO] Recepção encerrou conversa com ${telefone}`);
-        } else {
-          // Qualquer outra mensagem manual da recepção assume a conversa.
-          // Bot fica silenciado por até 2h — depois volta para encerrado automaticamente.
-          await setSessao(telefone, { etapa: 'atendimento_humano', assumido_em: new Date().toISOString() });
-          limparTimeouts(telefone);
-          console.log(`[ASSUMIDO] Recepção assumiu conversa com ${telefone}`);
-        }
+      if (ETAPAS_BOT.includes(sessaoAtual.etapa)) {
+        // Mensagem do bot durante conversa ativa — ignorar
+        return res.sendStatus(200);
       }
+
+      // Sessão encerrada ou atendimento_humano: mensagem fromMe é da recepção
+      ultimaMensagemNossa.set(telefone, Date.now());
+      console.log(`[HUMANO] Mensagem da recepção para ${telefone} (etapa: ${sessaoAtual.etapa})`);
+
+      const textoEnviado = body.data?.message?.conversation ||
+                           body.data?.message?.extendedTextMessage?.text || '';
+
+      if (detectarEncerramentoRecepcao(textoEnviado)) {
+        await marcarNaoReativar(telefone);
+        await setSessao(telefone, { etapa: 'encerrado' });
+        limparTimeouts(telefone);
+        console.log(`[ENCERRADO] Recepção encerrou conversa com ${telefone}`);
+      } else {
+        await setSessao(telefone, { etapa: 'atendimento_humano', assumido_em: new Date().toISOString() });
+        limparTimeouts(telefone);
+        console.log(`[ASSUMIDO] Recepção assumiu conversa com ${telefone}`);
+      }
+
       return res.sendStatus(200);
     }
 
