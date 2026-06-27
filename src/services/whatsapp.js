@@ -1,22 +1,23 @@
 const axios = require('axios');
 const pool = require('../utils/db');
 
-// Cache em memória para IDs recentes (evita consulta ao banco para mensagens novas)
+// Cache em memória — fonte primária e mais rápida
+// Persiste enquanto o processo estiver rodando
 const idsEnviadosPeloBot = new Set();
-const LIMITE_IDS_GUARDADOS = 500;
+const LIMITE_IDS_GUARDADOS = 1000; // aumentado para cobrir mais histórico
 
-// Persiste ID no banco para sobreviver a restarts
-async function registrarIdBot(id) {
+function registrarIdBotMemoria(id) {
   if (!id) return;
-
-  // Adiciona na memória
   idsEnviadosPeloBot.add(id);
   if (idsEnviadosPeloBot.size > LIMITE_IDS_GUARDADOS) {
     const primeiro = idsEnviadosPeloBot.values().next().value;
     idsEnviadosPeloBot.delete(primeiro);
   }
+}
 
-  // Persiste no banco (TTL de 7 dias — IDs mais antigos não precisam ser verificados)
+// Persiste no banco de forma assíncrona (não bloqueia o envio)
+async function registrarIdBotBanco(id) {
+  if (!id) return;
   try {
     await pool.query(
       `INSERT INTO mensagens_bot (id_mensagem, criado_em)
@@ -25,7 +26,6 @@ async function registrarIdBot(id) {
       [id]
     );
   } catch (err) {
-    // Não bloqueia o envio se o banco falhar
     console.error('Erro ao registrar ID bot no banco:', err.message);
   }
 }
@@ -33,10 +33,12 @@ async function registrarIdBot(id) {
 async function ehMensagemDoBot(id) {
   if (!id) return false;
 
-  // Verifica memória primeiro (mais rápido)
-  if (idsEnviadosPeloBot.has(id)) return true;
+  // Verifica memória primeiro — cobre 100% dos casos normais
+  if (idsEnviadosPeloBot.has(id)) {
+    return true;
+  }
 
-  // Se não está em memória, consulta o banco (pode ser pós-restart)
+  // Consulta banco apenas após restart (ID não está em memória)
   try {
     const { rows } = await pool.query(
       `SELECT 1 FROM mensagens_bot WHERE id_mensagem = $1 AND criado_em > NOW() - INTERVAL '7 days'`,
@@ -44,6 +46,7 @@ async function ehMensagemDoBot(id) {
     );
     if (rows.length > 0) {
       idsEnviadosPeloBot.add(id); // recarrega na memória
+      console.log(`[BOT-ID] ID ${id} recuperado do banco`);
       return true;
     }
   } catch (err) {
@@ -64,7 +67,14 @@ async function enviarMensagem(telefone, mensagem) {
     });
 
     const idMensagem = resposta.data?.key?.id;
-    await registrarIdBot(idMensagem);
+    if (idMensagem) {
+      // Registra em memória IMEDIATAMENTE (síncrono)
+      registrarIdBotMemoria(idMensagem);
+      // Persiste no banco em background (assíncrono, não bloqueia)
+      registrarIdBotBanco(idMensagem).catch(err =>
+        console.error('Erro background registrarIdBotBanco:', err.message)
+      );
+    }
     return idMensagem;
   } catch (err) {
     console.error('Erro ao enviar mensagem:', err.message);
