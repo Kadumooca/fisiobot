@@ -135,6 +135,7 @@ async function processarMensagem(telefone, mensagem) {
 
   if (textoLower === 'sair' || texto === '0') {
     await marcarNaoReativar(telefone);
+    if (global.registrarEncerramentoBot) global.registrarEncerramentoBot(telefone);
     await setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `Até logo! 😊 Quando precisar é só nos chamar.`);
   }
@@ -198,6 +199,7 @@ async function handleLissa(telefone, texto, sessao) {
 
   if (encerrar) {
     await marcarNaoReativar(telefone);
+    if (global.registrarEncerramentoBot) global.registrarEncerramentoBot(telefone);
     await setSessao(telefone, { etapa: 'encerrado' });
     return;
   }
@@ -251,6 +253,7 @@ async function handleRespostaLissa(telefone, texto, sessao) {
 
   if (ehNao && !ehSim) {
     await marcarNaoReativar(telefone);
+    if (global.registrarEncerramentoBot) global.registrarEncerramentoBot(telefone);
     await setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `Tudo bem! 😊 Foi um prazer conversar com você.\n\nEstamos aqui quando precisar. Até logo! 👋`);
   }
@@ -308,6 +311,7 @@ async function handleMenuPergunta(telefone, texto, sessao) {
 
   if (encerrar) {
     await marcarNaoReativar(telefone);
+    if (global.registrarEncerramentoBot) global.registrarEncerramentoBot(telefone);
     await setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, respostaLimpa);
   }
@@ -473,6 +477,7 @@ async function handleConfirmacao(telefone, texto, sessao) {
 
   // Recusa ou cancelamento
   if (texto === '0' || ['não', 'nao', 'cancelar'].some(p => textoLower.includes(p))) {
+    if (global.registrarEncerramentoBot) global.registrarEncerramentoBot(telefone);
     await setSessao(telefone, { etapa: 'encerrado' });
     return enviarMensagem(telefone, `Tudo bem! Quando quiser agendar é só nos chamar. 😊`);
   }
