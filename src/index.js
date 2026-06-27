@@ -13,6 +13,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/dashboard', dashboardRouter);
 
+// Exporta função para conversa.js registrar quando o bot encerra uma sessão
+global.registrarEncerramentoBot = (telefone) => {
+  ultimoEncerramentoBot.set(telefone, Date.now());
+};
+
 const NUMEROS_INTERNOS = new Set([
   '5511963675329', '5511959652048', '5511975444523', '5511988404884',
   '5511985033232', '5511998685040', '5511947034822', '5511973858548',
@@ -23,6 +28,7 @@ const NUMEROS_INTERNOS = new Set([
 const timeouts = new Map();
 const ultimaMensagemNossa = new Map();
 const mensagensPendentes = new Map();
+const ultimoEncerramentoBot = new Map(); // quando o bot encerrou a conversa
 const TRINTA_MIN = 30 * 60 * 1000;
 const QUINZE_MIN = 15 * 60 * 1000;
 const PALAVRAS_ATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
@@ -105,6 +111,17 @@ app.post('/webhook', async (req, res) => {
         'aguardando_celular_novo', 'aguardando_nome_terceiro', 'aguardando_cpf_terceiro',
         'aguardando_celular_terceiro'
       ];
+
+      // Sessão encerrada: webhook fromMe em até 30s = mensagem de despedida do bot → ignorar
+      // Depois de 30s = lembrete manual da recepção → aplica lógica normal
+      if (sessaoAtual.etapa === 'encerrado') {
+        const encerradoEm = ultimoEncerramentoBot.get(telefone) || 0;
+        const deltaSegundos = (Date.now() - encerradoEm) / 1000;
+        if (deltaSegundos < 30) {
+          console.log(`[BOT-FAREWELL] fromMe ignorado para ${telefone} (${Math.round(deltaSegundos)}s após encerramento)`);
+          return res.sendStatus(200);
+        }
+      }
 
       if (ETAPAS_BOT.includes(sessaoAtual.etapa)) {
         // Mensagem do bot durante conversa ativa — ignorar
