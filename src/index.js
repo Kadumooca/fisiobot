@@ -31,7 +31,12 @@ const mensagensPendentes = new Map();
 const ultimoEncerramentoBot = new Map(); // quando o bot encerrou a conversa
 const TRINTA_MIN = 30 * 60 * 1000;
 const QUINZE_MIN = 15 * 60 * 1000;
+
 const PALAVRAS_ATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
+const FRASES_ATIVACAO = [
+  'olá clínica lituânia, gostaria de mais informações sobre a terapia',
+  'ola clinica lituania, gostaria de mais informacoes sobre a terapia',
+];
 
 // Padrões que indicam encerramento pela recepção
 const PADROES_ENCERRAMENTO_RECEPCAO = [
@@ -156,7 +161,8 @@ app.post('/webhook', async (req, res) => {
     const tempoNossa = ultimaMensagemNossa.get(telefone);
     const tempoDesde = tempoNossa ? (Date.now() - tempoNossa) : Infinity;
     const textoLower = (mensagem || '').toLowerCase().trim();
-    const ePalavraAtivacao = PALAVRAS_ATIVACAO.some(p => textoLower === p);
+    const ePalavraAtivacao = PALAVRAS_ATIVACAO.some(p => textoLower === p) ||
+                             FRASES_ATIVACAO.some(p => textoLower.startsWith(p));
 
     if (tempoNossa) {
       if (tempoDesde < TRINTA_MIN) {
@@ -167,14 +173,13 @@ app.post('/webhook', async (req, res) => {
       ultimaMensagemNossa.delete(telefone);
     }
 
-    // Conversa encerrada: só reativa com palavra-chave
-    // (evita que respostas como "Ok", "Confirmado" a lembretes manuais reativem o bot)
+    // Conversa encerrada: só reativa com palavra-chave ou frase do JoinChat
     if (sessao.etapa === 'encerrado') {
       if (!ePalavraAtivacao) {
-        console.log(`[SILENCIADO] ${telefone} - conversa encerrada, aguardando palavra-chave`);
+        console.log(`[SILENCIADO] ${telefone} - conversa encerrada, aguardando ativação`);
         return res.sendStatus(200);
       }
-      console.log(`[REATIVADO] ${telefone} - palavra-chave recebida`);
+      console.log(`[REATIVADO] ${telefone} - mensagem de ativação recebida`);
       await setSessao(telefone, { etapa: 'conversando_lissa' });
     }
 
