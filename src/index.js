@@ -36,6 +36,8 @@ const PALAVRAS_ATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noi
 const FRASES_ATIVACAO = [
   'olá clínica lituânia, gostaria de mais informações sobre a terapia',
   'ola clinica lituania, gostaria de mais informacoes sobre a terapia',
+  'olá, gostaria de mais informações',
+  'ola, gostaria de mais informacoes',
 ];
 
 // Padrões que indicam encerramento pela recepção
