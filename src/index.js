@@ -330,7 +330,8 @@ function agendarResumoDiario() {
 }
 
 agendarResumoDiario();
-executarRemarketing().catch(console.error);
+// Aguarda 30s após startup para evitar "too many clients" durante inicialização
+setTimeout(() => executarRemarketing().catch(console.error), 30000);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
