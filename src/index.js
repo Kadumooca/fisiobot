@@ -175,13 +175,16 @@ app.post('/webhook', async (req, res) => {
       ultimaMensagemNossa.delete(telefone);
     }
 
-    // Conversa encerrada: só reativa com palavra-chave ou frase do JoinChat
-    if (sessao.etapa === 'encerrado') {
-      if (!ePalavraAtivacao) {
+    // Conversa encerrada ou primeiro contato
+    // Primeiro contato: sessão nunca existiu (etapa null/undefined) → reativa sempre
+    // Sessão encerrada: só reativa com palavra-chave ou frase do JoinChat
+    if (!sessao.etapa || sessao.etapa === 'encerrado') {
+      const primeiroContato = !sessao.etapa;
+      if (!primeiroContato && !ePalavraAtivacao) {
         console.log(`[SILENCIADO] ${telefone} - conversa encerrada, aguardando ativação`);
         return res.sendStatus(200);
       }
-      console.log(`[REATIVADO] ${telefone} - mensagem de ativação recebida`);
+      console.log(`[REATIVADO] ${telefone} - ${primeiroContato ? 'primeiro contato' : 'mensagem de ativação'}`);
       await setSessao(telefone, { etapa: 'conversando_lissa' });
     }
 
