@@ -357,8 +357,8 @@ async function handleParaQuem(telefone, texto, sessao) {
 }
 
 async function handleCPF(telefone, texto, sessao) {
-  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.`);
-  const cpf = limparCPF(texto);
+  const cpf = limparCPF(texto); // limpa primeiro, valida depois
+  if (!validarCPF(cpf)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
   await enviarMensagem(telefone, '🔍 Buscando seus dados...');
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (!cliente) return enviarMensagem(telefone, `❌ CPF não encontrado.\n\n${CONTATO_HUMANO}`);
@@ -371,23 +371,45 @@ async function handleCPF(telefone, texto, sessao) {
 }
 
 async function handleNomeNovo(telefone, texto, sessao) {
+  const textoLower = texto.toLowerCase().trim();
+  // Paciente recusou fazer cadastro — oferece ver horários sem cadastro
+  const recusou = ['não', 'nao', 'não quero', 'nao quero', 'sem cadastro', 'não quero cadastro',
+    'nao quero cadastro', 'apenas ver', 'só ver', 'so ver', 'apenas horarios', 'apenas horários',
+    'só horários', 'so horarios', 'não agora', 'nao agora'].some(p => textoLower.includes(p));
+  if (recusou) {
+    await setSessao(telefone, { etapa: 'aguardando_menu', regiaoCorpo: sessao.regiaoCorpo });
+    await enviarMensagem(telefone, `Tudo bem! 😊 Para ver os horários disponíveis e agendar, precisaremos do seu cadastro no momento da confirmação.\n\nSe quiser navegar antes, pode escolher a especialidade normalmente!`);
+    return enviarMensagem(telefone, MENU);
+  }
   if (texto.length < 3) return enviarMensagem(telefone, `Informe seu *nome completo*:`);
   await setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
-  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)`);
+  return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
 }
 
 async function handleCPFNovo(telefone, texto, sessao) {
-  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.`);
-  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: limparCPF(texto), nomeNovo: sessao.nomeNovo, regiaoCorpo: sessao.regiaoCorpo });
+  const cpf = limparCPF(texto); // limpa pontos/traços antes de validar
+  if (!validarCPF(cpf)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
+  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: cpf, nomeNovo: sessao.nomeNovo, regiaoCorpo: sessao.regiaoCorpo });
   return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
 }
 
 async function handleCelularNovo(telefone, texto, sessao) {
   const celular = texto.replace(/\D/g, '');
-  if (celular.length < 10) return enviarMensagem(telefone, `Celular inválido. Informe com DDD.`);
+  if (celular.length < 10 || celular.length > 11) return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
   await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
   const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo, Celular: celular, Email: '', Sexo: '' });
-  if (!id) return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
+  if (!id) {
+    // Tenta buscar se o CPF já existe no sistema
+    const clienteExistente = await fisiosoft.buscarClientePorCPF(sessao.cpfNovo);
+    if (clienteExistente) {
+      const cliente = clienteExistente;
+      await salvarClientePorTelefone(telefone, cliente);
+      await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
+      await enviarMensagem(telefone, `✅ Encontrei seu cadastro, *${cliente.Nome}*! 😊`);
+      return enviarMensagem(telefone, `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
+    }
+    return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
+  }
   const cliente = { Id: id, Nome: sessao.nomeNovo };
   await salvarClientePorTelefone(telefone, cliente);
   await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
@@ -396,8 +418,8 @@ async function handleCelularNovo(telefone, texto, sessao) {
 }
 
 async function handleCPFTerceiro(telefone, texto, sessao) {
-  if (!validarCPF(texto)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.`);
   const cpf = limparCPF(texto);
+  if (!validarCPF(cpf)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
   await enviarMensagem(telefone, '🔍 Buscando cadastro...');
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (cliente) {
