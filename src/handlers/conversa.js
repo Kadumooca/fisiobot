@@ -361,7 +361,11 @@ async function handleCPF(telefone, texto, sessao) {
   if (!validarCPF(cpf)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
   await enviarMensagem(telefone, '🔍 Buscando seus dados...');
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
-  if (!cliente) return enviarMensagem(telefone, `❌ CPF não encontrado.\n\n${CONTATO_HUMANO}`);
+  if (!cliente) {
+    // CPF não encontrado — oferece criar cadastro novo em vez de parar
+    await setSessao(telefone, { etapa: 'aguardando_nome_novo', cpfPreenchido: cpf, regiaoCorpo: sessao.regiaoCorpo, acao: sessao.acao });
+    return enviarMensagem(telefone, `Não encontrei seu cadastro com esse CPF. 😊\n\nVamos criar agora! Qual é o seu *nome completo*?`);
+  }
   await salvarClientePorTelefone(telefone, cliente);
   if (sessao.acao === 'agendar') {
     await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
@@ -382,6 +386,11 @@ async function handleNomeNovo(telefone, texto, sessao) {
     return enviarMensagem(telefone, MENU);
   }
   if (texto.length < 3) return enviarMensagem(telefone, `Informe seu *nome completo*:`);
+  // Se CPF já foi preenchido no passo anterior, pula direto pro celular
+  if (sessao.cpfPreenchido) {
+    await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: sessao.cpfPreenchido, nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
+    return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
+  }
   await setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
   return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
 }
