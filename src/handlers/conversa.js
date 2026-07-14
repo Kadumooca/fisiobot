@@ -75,13 +75,29 @@ function formatarData(date) {
   return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
 }
 
+// Feriados nacionais fixos e móveis restantes de 2026
+const FERIADOS = new Set([
+  '07/09/2026', // Independência do Brasil
+  '12/10/2026', // Nossa Senhora Aparecida
+  '02/11/2026', // Finados
+  '15/11/2026', // Proclamação da República
+  '20/11/2026', // Consciência Negra
+  '25/12/2026', // Natal
+  '01/01/2027', // Ano Novo
+]);
+
+function ehFeriado(data) {
+  return FERIADOS.has(formatarData(data));
+}
+
 async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7) {
   const horarios = [];
   const hoje = new Date();
   for (let i = 1; i <= diasBusca && horarios.length < 10; i++) {
     const data = new Date(hoje);
     data.setDate(hoje.getDate() + i);
-    if (data.getDay() === 0 || data.getDay() === 6) continue;
+    if (data.getDay() === 0 || data.getDay() === 6) continue; // fim de semana
+    if (ehFeriado(data)) continue; // feriado
     const dataStr = formatarData(data);
     const slots = await fisiosoft.buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr);
     if (slots?.length) slots.forEach(hora => horarios.push({
