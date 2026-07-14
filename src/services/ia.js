@@ -54,6 +54,7 @@ Individual, 1h. Sem avaliação prévia.
 - Endereço: Rua Lituânia, 209 - Mooca, SP — CEP 03184-020
 - Telefone: (11) 2268-3195 | WhatsApp: (11) 98728-1427
 - Horário: Segunda a sexta, 7h às 20h
+- Não funcionamos aos sábados, domingos e feriados nacionais
 - Particular — auxiliamos com documentação para reembolso no plano
 
 === FLUXO DE ATENDIMENTO ===
