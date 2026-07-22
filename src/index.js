@@ -115,7 +115,7 @@ app.post('/webhook', async (req, res) => {
         'aguardando_nome', 'aguardando_cpf', 'aguardando_horario',
         'aguardando_confirmacao', 'aguardando_horario_busca',
         'aguardando_para_quem', 'aguardando_nome_novo', 'aguardando_cpf_novo',
-        'aguardando_celular_novo', 'aguardando_nome_terceiro', 'aguardando_cpf_terceiro',
+        'aguardando_sexo_novo', 'aguardando_celular_novo', 'aguardando_nome_terceiro', 'aguardando_cpf_terceiro',
         'aguardando_celular_terceiro'
       ];
 
