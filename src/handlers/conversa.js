@@ -90,9 +90,21 @@ function ehFeriado(data) {
   return FERIADOS.has(formatarData(data));
 }
 
-async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7) {
+// Agenda 7 = Pilates Tarde (Aldine): bloqueia horários 17h+ para masculino em ter/qua/qui
+const AGENDA_ALDINE_TARDE = 7;
+const DIAS_BLOQUEIO_MASCULINO = new Set([2, 3, 4]); // 2=terça, 3=quarta, 4=quinta
+
+function ehHorarioBloqueadoMasculino(agendaId, diaSemana, hora) {
+  if (agendaId !== AGENDA_ALDINE_TARDE) return false;
+  if (!DIAS_BLOQUEIO_MASCULINO.has(diaSemana)) return false;
+  const horas = parseInt(hora.split(':')[0]);
+  return horas >= 17;
+}
+
+async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7, sexo = null) {
   const horarios = [];
   const hoje = new Date();
+  const masculino = sexo && sexo.toLowerCase().includes('masculino');
   for (let i = 1; i <= diasBusca && horarios.length < 10; i++) {
     const data = new Date(hoje);
     data.setDate(hoje.getDate() + i);
@@ -100,9 +112,10 @@ async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7) {
     if (ehFeriado(data)) continue; // feriado
     const dataStr = formatarData(data);
     const slots = await fisiosoft.buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr);
-    if (slots?.length) slots.forEach(hora => horarios.push({
-      data: dataStr, diaSemana: DIAS_SEMANA[data.getDay()], hora, agendaId, procedimentoId
-    }));
+    if (slots?.length) slots.forEach(hora => {
+      if (masculino && ehHorarioBloqueadoMasculino(agendaId, data.getDay(), hora)) return;
+      horarios.push({ data: dataStr, diaSemana: DIAS_SEMANA[data.getDay()], hora, agendaId, procedimentoId });
+    });
   }
   return horarios;
 }
@@ -164,6 +177,7 @@ async function processarMensagem(telefone, mensagem) {
     case 'aguardando_para_quem':          return handleParaQuem(telefone, texto, sessao);
     case 'aguardando_cpf':                return handleCPF(telefone, texto, sessao);
     case 'aguardando_cpf_novo':           return handleCPFNovo(telefone, texto, sessao);
+    case 'aguardando_sexo_novo':          return handleSexoNovo(telefone, texto, sessao);
     case 'aguardando_nome_novo':          return handleNomeNovo(telefone, texto, sessao);
     case 'aguardando_celular_novo':       return handleCelularNovo(telefone, texto, sessao);
     case 'aguardando_cpf_terceiro':       return handleCPFTerceiro(telefone, texto, sessao);
@@ -402,29 +416,39 @@ async function handleNomeNovo(telefone, texto, sessao) {
     return enviarMensagem(telefone, MENU);
   }
   if (texto.length < 3) return enviarMensagem(telefone, `Informe seu *nome completo*:`);
-  // Se CPF já foi preenchido no passo anterior, pula direto pro celular
+  // Se CPF já foi preenchido no passo anterior, pula direto pro sexo
   if (sessao.cpfPreenchido) {
-    await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: sessao.cpfPreenchido, nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
-    return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
+    await setSessao(telefone, { etapa: 'aguardando_sexo_novo', cpfPreenchido: sessao.cpfPreenchido, nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
+    return enviarMensagem(telefone, `Qual o seu sexo?\n\n*1.* Feminino\n*2.* Masculino`);
   }
   await setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
   return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
 }
 
 async function handleCPFNovo(telefone, texto, sessao) {
-  const cpf = limparCPF(texto); // limpa pontos/traços antes de validar
+  const cpf = limparCPF(texto);
   if (!validarCPF(cpf)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
-  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo: cpf, nomeNovo: sessao.nomeNovo, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, { etapa: 'aguardando_sexo_novo', cpfNovo: cpf, nomeNovo: sessao.nomeNovo, regiaoCorpo: sessao.regiaoCorpo });
+  return enviarMensagem(telefone, `Qual o seu sexo?\n\n*1.* Feminino\n*2.* Masculino`);
+}
+
+async function handleSexoNovo(telefone, texto, sessao) {
+  let sexo = '';
+  if (texto === '1') sexo = 'Feminino';
+  else if (texto === '2') sexo = 'Masculino';
+  else return enviarMensagem(telefone, `Digite *1* para Feminino ou *2* para Masculino.`);
+  const cpfNovo = sessao.cpfNovo || sessao.cpfPreenchido;
+  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo, nomeNovo: sessao.nomeNovo, sexoNovo: sexo, regiaoCorpo: sessao.regiaoCorpo });
   return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
 }
 
 async function handleCelularNovo(telefone, texto, sessao) {
   const celular = texto.replace(/\D/g, '');
   if (celular.length < 10 || celular.length > 11) return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
+  const sexo = sessao.sexoNovo || '';
   await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
-  const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo, Celular: celular, Email: '', Sexo: '' });
+  const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo, Celular: celular, Email: '', Sexo: sexo });
   if (!id) {
-    // Tenta buscar se o CPF já existe no sistema
     const clienteExistente = await fisiosoft.buscarClientePorCPF(sessao.cpfNovo);
     if (clienteExistente) {
       const cliente = clienteExistente;
@@ -435,7 +459,7 @@ async function handleCelularNovo(telefone, texto, sessao) {
     }
     return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
   }
-  const cliente = { Id: id, Nome: sessao.nomeNovo };
+  const cliente = { Id: id, Nome: sessao.nomeNovo, Sexo: sexo };
   await salvarClientePorTelefone(telefone, cliente);
   await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
   await enviarMensagem(telefone, `✅ Cadastro criado, *${sessao.nomeNovo}*! 🎉`);
@@ -500,7 +524,8 @@ async function handlePeriodo(telefone, texto, sessao) {
 
 async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialidade, regiaoCorpo) {
   await enviarMensagem(telefone, `🔍 Buscando horários disponíveis...`);
-  const horarios = await buscarHorarios(agenda.agendaId, agenda.procedimentoId, dias);
+  const sexo = cliente?.Sexo || null;
+  const horarios = await buscarHorarios(agenda.agendaId, agenda.procedimentoId, dias, sexo);
   if (!horarios?.length) return enviarMensagem(telefone, `😔 Sem horários nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}`);
   const lista = horarios.map((h, i) => `*${i+1}.* ${h.diaSemana} ${h.data} às ${h.hora}`).join('\n');
   await setSessao(telefone, { etapa: 'aguardando_horario', agenda, horarios, cliente, especialidade, regiaoCorpo });
