@@ -533,8 +533,21 @@ async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialid
 }
 
 async function handleHorario(telefone, texto, sessao) {
+  const textoLower = texto.toLowerCase().trim();
+
+  // Pedido de atendimento humano ou texto livre não numérico
+  const pedidoHumano = ['falar com atendente', 'falar com recepção', 'falar com recepcao',
+    'atendente', 'recepção', 'recepcao', 'humano', 'pessoa', 'já tenho', 'ja tenho',
+    'já agendei', 'ja agendei', 'já tenho agendamento', 'ja tenho agendamento'].some(p => textoLower.includes(p));
+
+  if (pedidoHumano) return transferirParaRecepcao(telefone);
+
   const i = parseInt(texto) - 1;
-  if (isNaN(i) || i < 0 || i >= sessao.horarios.length) return enviarMensagem(telefone, `Opção inválida. Digite entre 1 e ${sessao.horarios.length}.`);
+  if (isNaN(i) || i < 0 || i >= sessao.horarios.length) {
+    // Texto livre não reconhecido — transfere para recepção
+    return transferirParaRecepcao(telefone);
+  }
+
   const h = sessao.horarios[i];
   await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario: h, agenda: sessao.agenda, cliente: sessao.cliente, especialidade: sessao.especialidade });
   return enviarMensagem(telefone,
