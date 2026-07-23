@@ -115,7 +115,7 @@ Note: as tags entre [ ] nunca aparecem pro paciente — são instruções intern
 15. TAG [REGIAO:nome_da_regiao]: invisível ao paciente — sempre no final da mensagem quando região for mencionada.
 16. ESTÁGIOS: A clínica NÃO aceita estagiários. Nunca diga que aceita ou que "precisa verificar disponibilidade". Responda diretamente que não oferecemos estágios no momento e agradeça o interesse.`;
 
-async function consultarIA(historico) {
+async function consultarIA(historico, tentativa = 1) {
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -125,7 +125,7 @@ async function consultarIA(historico) {
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 250,
+        max_tokens: 150,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...historico,
@@ -134,6 +134,14 @@ async function consultarIA(historico) {
     });
 
     const data = await response.json();
+
+    // Rate limit — aguarda e tenta novamente (até 3 tentativas)
+    if (data.error?.code === 'rate_limit_exceeded' && tentativa <= 3) {
+      const espera = tentativa * 15000; // 15s, 30s, 45s
+      console.log(`[GROQ] Rate limit atingido. Aguardando ${espera/1000}s antes da tentativa ${tentativa + 1}...`);
+      await new Promise(r => setTimeout(r, espera));
+      return consultarIA(historico, tentativa + 1);
+    }
 
     if (!data.choices) {
       console.error('Resposta Groq sem choices:', JSON.stringify(data));
