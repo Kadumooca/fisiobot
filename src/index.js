@@ -43,7 +43,7 @@ const FRASES_ATIVACAO = [
 // Padrões que indicam encerramento pela recepção
 const PADROES_ENCERRAMENTO_RECEPCAO = [
   '👋', 'até logo', 'ate logo', 'até mais', 'ate mais', 'tchau', 'flw',
-  'boa sessão', 'boa sessao', 'obrigado', 'obrigada', 'foi ótimo',
+  'boa sessão', 'boa sessao', 'foi ótimo',
   'foi otimo', 'até breve', 'ate breve', 'tenha um bom dia',
   'até a próxima', 'ate a proxima'
 ];
