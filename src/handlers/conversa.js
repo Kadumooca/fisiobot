@@ -434,11 +434,12 @@ async function handleCPFNovo(telefone, texto, sessao) {
 
 async function handleSexoNovo(telefone, texto, sessao) {
   let sexo = '';
-  if (texto === '1') sexo = 'Feminino';
-  else if (texto === '2') sexo = 'Masculino';
+  let sexoEnum = null;
+  if (texto === '1') { sexo = 'Feminino'; sexoEnum = 1; }
+  else if (texto === '2') { sexo = 'Masculino'; sexoEnum = 2; }
   else return enviarMensagem(telefone, `Digite *1* para Feminino ou *2* para Masculino.`);
   const cpfNovo = sessao.cpfNovo || sessao.cpfPreenchido;
-  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo, nomeNovo: sessao.nomeNovo, sexoNovo: sexo, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo, nomeNovo: sessao.nomeNovo, sexoNovo: sexo, sexoEnum, regiaoCorpo: sessao.regiaoCorpo });
   return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
 }
 
@@ -446,8 +447,9 @@ async function handleCelularNovo(telefone, texto, sessao) {
   const celular = texto.replace(/\D/g, '');
   if (celular.length < 10 || celular.length > 11) return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
   const sexo = sessao.sexoNovo || '';
+  const sexoEnum = sessao.sexoEnum ?? null;
   await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
-  const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo, Celular: celular, Email: '', Sexo: sexo });
+  const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeNovo, Cpf: sessao.cpfNovo, Celular: celular, Email: '', Sexo: sexoEnum });
   if (!id) {
     const clienteExistente = await fisiosoft.buscarClientePorCPF(sessao.cpfNovo);
     if (clienteExistente) {
