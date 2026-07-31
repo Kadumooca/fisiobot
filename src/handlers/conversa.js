@@ -445,7 +445,22 @@ async function handleSexoNovo(telefone, texto, sessao) {
 
 async function handleCelularNovo(telefone, texto, sessao) {
   const celular = texto.replace(/\D/g, '');
-  if (celular.length < 10 || celular.length > 11) return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
+
+  // Detecta se o paciente digitou o CPF por engano (mesmo valor já informado antes)
+  const cpfReferencia = sessao.cpfNovo || sessao.cpfPreenchido;
+  if (cpfReferencia && celular === cpfReferencia) {
+    return enviarMensagem(telefone, `Esse número é o *CPF* que você já informou. 😊\n\nAgora preciso do seu *celular* com DDD.\n\nExemplo: 11999999999`);
+  }
+
+  if (celular.length < 10 || celular.length > 11) {
+    return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
+  }
+
+  // Celular com 11 dígitos deve ter "9" como 3º dígito (padrão de celular no Brasil desde 2016)
+  if (celular.length === 11 && celular[2] !== '9') {
+    return enviarMensagem(telefone, `Esse número não parece um celular válido (poderia ser um CPF?). 🤔\n\nInforme seu *celular* com DDD.\n\nExemplo: 11999999999`);
+  }
+
   const sexo = sessao.sexoNovo || '';
   const sexoEnum = sessao.sexoEnum ?? null;
   await enviarMensagem(telefone, '⏳ Criando seu cadastro...');
@@ -459,7 +474,9 @@ async function handleCelularNovo(telefone, texto, sessao) {
       await enviarMensagem(telefone, `✅ Encontrei seu cadastro, *${cliente.Nome}*! 😊`);
       return enviarMensagem(telefone, `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
     }
-    return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
+    // Erro real ao criar cadastro — não deixa a sessão travada em aguardando_celular_novo
+    await enviarMensagem(telefone, `❌ Não consegui finalizar seu cadastro agora. 😕\n\nVou te transferir para a recepção para resolver isso rapidinho.`);
+    return transferirParaRecepcao(telefone);
   }
   const cliente = { Id: id, Nome: sessao.nomeNovo, Sexo: sexo };
   await salvarClientePorTelefone(telefone, cliente);
@@ -492,7 +509,11 @@ async function handleCelularTerceiro(telefone, texto, sessao) {
   if (celular.length < 10) return enviarMensagem(telefone, `Celular inválido. Informe com DDD.`);
   await enviarMensagem(telefone, '⏳ Criando cadastro...');
   const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeTerceiro, Cpf: sessao.cpfTerceiro, Celular: celular, Email: '', Sexo: '' });
-  if (!id) return enviarMensagem(telefone, `❌ Erro ao criar cadastro.\n\n${CONTATO_HUMANO}`);
+  if (!id) {
+    // Erro real ao criar cadastro — não deixa a sessão travada em aguardando_celular_terceiro
+    await enviarMensagem(telefone, `❌ Não consegui finalizar esse cadastro agora. 😕\n\nVou te transferir para a recepção para resolver isso rapidinho.`);
+    return transferirParaRecepcao(telefone);
+  }
   const cliente = { Id: id, Nome: sessao.nomeTerceiro };
   await enviarMensagem(telefone, `✅ Cadastro criado para *${sessao.nomeTerceiro}*! 🎉`);
   return iniciarAgendamento(telefone, cliente, sessao.regiaoCorpo);
