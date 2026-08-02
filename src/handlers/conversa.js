@@ -63,10 +63,7 @@ const AGENDAS = {
   '6': { nome: 'Consulta Vascular', diasBusca: 30, periodos: [
     { label: '📋 Ver horários disponíveis', agendaId: 11, procedimentoId: 22, idProfissional: 9, agendaNome: 'Consulta Vascular' },
   ]},
-  '7': { nome: 'Drenagem / Massagem', periodos: [
-    { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 84, idProfissional: 6, agendaNome: 'Drenagem / Massagem' },
-  ]},
-  '8': { nome: 'Home Care', diasBusca: 7, periodos: [
+  '7': { nome: 'Home Care', diasBusca: 7, periodos: [
     { label: '📋 Ver horários disponíveis', agendaId: 32, procedimentoId: 101, idProfissional: 31, agendaNome: 'Home Care - Domiciliar' },
   ]},
 };
@@ -524,7 +521,7 @@ async function iniciarAgendamento(telefone, cliente, regiaoCorpo) {
   return enviarMensagem(telefone,
     `Para qual especialidade? 😊\n\n` +
     `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
-    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 💆 Drenagem / Massagem\n*8.* 🏠 Home Care (Domiciliar)\n\n_ou *0* para encerrar_`
+    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 🏠 Home Care (Domiciliar)\n\n_ou *0* para encerrar_`
   );
 }
 
