@@ -98,6 +98,17 @@ function ehHorarioBloqueadoMasculino(agendaId, diaSemana, hora) {
   return horas >= 17;
 }
 
+// Como o sexo do paciente só é conhecido após o cadastro, revalida aqui se o horário
+// escolhido (antes de sabermos o sexo) na verdade era restrito — ex: agenda Aldine
+// bloqueada para masculino em determinados dias/horários.
+function horarioBloqueadoParaCliente(agenda, horario, cliente) {
+  const sexo = cliente?.Sexo;
+  const masculino = typeof sexo === 'string' && sexo.toLowerCase().includes('masculino');
+  if (!masculino) return false;
+  const diaSemanaNum = DIAS_SEMANA.indexOf(horario.diaSemana);
+  return ehHorarioBloqueadoMasculino(agenda.agendaId, diaSemanaNum, horario.hora);
+}
+
 async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7, sexo = null) {
   const horarios = [];
   const hoje = new Date();
@@ -172,6 +183,7 @@ async function processarMensagem(telefone, mensagem) {
     case 'aguardando_menu':               return handleMenu(telefone, texto, sessao);
     case 'aguardando_tipo_cliente':       return handleTipoCliente(telefone, texto, sessao);
     case 'aguardando_para_quem':          return handleParaQuem(telefone, texto, sessao);
+    case 'aguardando_para_quem_final':    return handleParaQuemFinal(telefone, texto, sessao);
     case 'aguardando_cpf':                return handleCPF(telefone, texto, sessao);
     case 'aguardando_cpf_novo':           return handleCPFNovo(telefone, texto, sessao);
     case 'aguardando_sexo_novo':          return handleSexoNovo(telefone, texto, sessao);
@@ -310,8 +322,7 @@ async function handleRespostaLissa(telefone, texto, sessao) {
 async function handleMenu(telefone, texto, sessao) {
   switch (texto) {
     case '1':
-      await setSessao(telefone, { etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: sessao.regiaoCorpo });
-      return enviarMensagem(telefone, `Você já é nosso paciente?\n\n*1.* ✅ Sim\n*2.* 🆕 Não, sou novo paciente\n\n_ou *0* para encerrar_`);
+      return iniciarAgendamento(telefone, null, sessao.regiaoCorpo);
     case '2':
       return transferirParaRecepcao(telefone);
     default:
@@ -356,22 +367,68 @@ async function handleMenuPergunta(telefone, texto, sessao) {
 async function handleTipoCliente(telefone, texto, sessao) {
   const clienteSalvo = await buscarClientePorTelefone(telefone);
   if (clienteSalvo) {
-    if (sessao.acao === 'agendar') {
-      await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: clienteSalvo, regiaoCorpo: sessao.regiaoCorpo });
-      return enviarMensagem(telefone, `Olá de novo, *${clienteSalvo.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa\n\n_ou *0* para encerrar_`);
-    }
-    return mostrarAgendamentos(telefone, clienteSalvo, sessao.acao);
+    return finalizarComCliente(telefone, clienteSalvo, sessao);
   }
   if (texto === '1') {
-    await setSessao(telefone, { etapa: 'aguardando_cpf', acao: sessao.acao, regiaoCorpo: sessao.regiaoCorpo });
+    await setSessao(telefone, {
+      etapa: 'aguardando_cpf', acao: sessao.acao, regiaoCorpo: sessao.regiaoCorpo,
+      horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+    });
     return enviarMensagem(telefone, `Informe seu *CPF* (somente números):\n\nExemplo: 12345678901\n\n_ou *0* para encerrar_`);
   }
   if (texto === '2') {
     if (sessao.acao !== 'agendar') return enviarMensagem(telefone, `Para cancelar precisamos encontrar seu cadastro. Informe seu *CPF*:`);
-    await setSessao(telefone, { etapa: 'aguardando_nome_novo', regiaoCorpo: sessao.regiaoCorpo });
+    await setSessao(telefone, {
+      etapa: 'aguardando_nome_novo', regiaoCorpo: sessao.regiaoCorpo,
+      horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+    });
     return enviarMensagem(telefone, `Vamos criar seu cadastro! 😊\n\nQual é o seu *nome completo*?`);
   }
   return enviarMensagem(telefone, `Digite *1* para sim ou *2* para não.`);
+}
+
+// Chamado depois que o cliente é identificado/cadastrado — se já havia um horário
+// escolhido antes do cadastro, pula direto pra pergunta "para quem" e depois confirmação,
+// sem reabrir a escolha de especialidade/período/horário.
+async function finalizarComCliente(telefone, cliente, sessao) {
+  await salvarClientePorTelefone(telefone, cliente);
+  if (sessao.horarioPendente) {
+    await setSessao(telefone, {
+      etapa: 'aguardando_para_quem_final', clienteResponsavel: cliente,
+      horarioPendente: sessao.horarioPendente, agenda: sessao.agenda,
+      especialidade: sessao.especialidade, regiaoCorpo: sessao.regiaoCorpo,
+    });
+    return enviarMensagem(telefone, `Olá, *${cliente.Nome}*! 😊\n\nEsse agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
+  }
+  // Fluxo legado (sem horário pré-selecionado)
+  await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
+  return enviarMensagem(telefone, `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa\n\n_ou *0* para encerrar_`);
+}
+
+async function handleParaQuemFinal(telefone, texto, sessao) {
+  if (texto === '1') {
+    return confirmarOuRejeitarPorSexo(telefone, sessao.clienteResponsavel, sessao.agenda, sessao.horarioPendente, sessao.especialidade);
+  }
+  if (texto === '2') {
+    await setSessao(telefone, {
+      etapa: 'aguardando_cpf_terceiro', regiaoCorpo: sessao.regiaoCorpo,
+      horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+    });
+    return enviarMensagem(telefone, `Informe o *CPF* da pessoa:\n\nExemplo: 12345678901`);
+  }
+  return enviarMensagem(telefone, `Digite *1* para você ou *2* para outra pessoa.`);
+}
+
+// Como o sexo só é conhecido após o cadastro, revalida antes de confirmar; se o
+// horário escolhido era restrito para o sexo do cliente, avisa e volta pro menu.
+async function confirmarOuRejeitarPorSexo(telefone, cliente, agenda, horario, especialidade) {
+  if (horarioBloqueadoParaCliente(agenda, horario, cliente)) {
+    await setSessao(telefone, { etapa: 'aguardando_menu', regiaoCorpo: null });
+    await enviarMensagem(telefone, `😕 Esse horário específico não está disponível para o seu perfil. Vamos escolher outro?`);
+    return enviarMensagem(telefone, MENU);
+  }
+  await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario, agenda, cliente, especialidade });
+  return mostrarConfirmacao(telefone, cliente, agenda, horario);
 }
 
 async function handleParaQuem(telefone, texto, sessao) {
@@ -390,42 +447,48 @@ async function handleCPF(telefone, texto, sessao) {
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (!cliente) {
     // CPF não encontrado — oferece criar cadastro novo em vez de parar
-    await setSessao(telefone, { etapa: 'aguardando_nome_novo', cpfPreenchido: cpf, regiaoCorpo: sessao.regiaoCorpo, acao: sessao.acao });
+    await setSessao(telefone, {
+      etapa: 'aguardando_nome_novo', cpfPreenchido: cpf, regiaoCorpo: sessao.regiaoCorpo, acao: sessao.acao,
+      horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+    });
     return enviarMensagem(telefone, `Não encontrei seu cadastro com esse CPF. 😊\n\nVamos criar agora! Qual é o seu *nome completo*?`);
   }
-  await salvarClientePorTelefone(telefone, cliente);
   if (sessao.acao === 'agendar') {
-    await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
-    return enviarMensagem(telefone, `Olá, *${cliente.Nome}*! 😊\n\nEste agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
+    return finalizarComCliente(telefone, cliente, sessao);
   }
+  await salvarClientePorTelefone(telefone, cliente);
   return mostrarAgendamentos(telefone, cliente, sessao.acao);
 }
 
 async function handleNomeNovo(telefone, texto, sessao) {
   const textoLower = texto.toLowerCase().trim();
-  // Paciente recusou fazer cadastro — oferece ver horários sem cadastro
+  // Paciente recusou fazer cadastro — volta pro menu, sem perder o que já foi visto
   const recusou = ['não', 'nao', 'não quero', 'nao quero', 'sem cadastro', 'não quero cadastro',
     'nao quero cadastro', 'apenas ver', 'só ver', 'so ver', 'apenas horarios', 'apenas horários',
     'só horários', 'so horarios', 'não agora', 'nao agora'].some(p => textoLower.includes(p));
   if (recusou) {
     await setSessao(telefone, { etapa: 'aguardando_menu', regiaoCorpo: sessao.regiaoCorpo });
-    await enviarMensagem(telefone, `Tudo bem! 😊 Para ver os horários disponíveis e agendar, precisaremos do seu cadastro no momento da confirmação.\n\nSe quiser navegar antes, pode escolher a especialidade normalmente!`);
+    await enviarMensagem(telefone, `Sem problemas! 😊 Pra confirmar esse horário vamos precisar do seu cadastro. Se preferir, volte quando quiser e escolha um horário novamente.`);
     return enviarMensagem(telefone, MENU);
   }
   if (texto.length < 3) return enviarMensagem(telefone, `Informe seu *nome completo*:`);
+  const contexto = { regiaoCorpo: sessao.regiaoCorpo, horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade };
   // Se CPF já foi preenchido no passo anterior, pula direto pro sexo
   if (sessao.cpfPreenchido) {
-    await setSessao(telefone, { etapa: 'aguardando_sexo_novo', cpfPreenchido: sessao.cpfPreenchido, nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
+    await setSessao(telefone, { etapa: 'aguardando_sexo_novo', cpfPreenchido: sessao.cpfPreenchido, nomeNovo: texto, ...contexto });
     return enviarMensagem(telefone, `Qual o seu sexo?\n\n*1.* Feminino\n*2.* Masculino`);
   }
-  await setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, { etapa: 'aguardando_cpf_novo', nomeNovo: texto, ...contexto });
   return enviarMensagem(telefone, `Qual é o seu *CPF*? (somente números)\n\nExemplo: 12345678901`);
 }
 
 async function handleCPFNovo(telefone, texto, sessao) {
   const cpf = limparCPF(texto);
   if (!validarCPF(cpf)) return enviarMensagem(telefone, `CPF inválido. Informe apenas os *11 números*.\n\nExemplo: 12345678901`);
-  await setSessao(telefone, { etapa: 'aguardando_sexo_novo', cpfNovo: cpf, nomeNovo: sessao.nomeNovo, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, {
+    etapa: 'aguardando_sexo_novo', cpfNovo: cpf, nomeNovo: sessao.nomeNovo, regiaoCorpo: sessao.regiaoCorpo,
+    horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+  });
   return enviarMensagem(telefone, `Qual o seu sexo?\n\n*1.* Feminino\n*2.* Masculino`);
 }
 
@@ -436,7 +499,10 @@ async function handleSexoNovo(telefone, texto, sessao) {
   else if (texto === '2') { sexo = 'Masculino'; sexoEnum = 2; }
   else return enviarMensagem(telefone, `Digite *1* para Feminino ou *2* para Masculino.`);
   const cpfNovo = sessao.cpfNovo || sessao.cpfPreenchido;
-  await setSessao(telefone, { etapa: 'aguardando_celular_novo', cpfNovo, nomeNovo: sessao.nomeNovo, sexoNovo: sexo, sexoEnum, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, {
+    etapa: 'aguardando_celular_novo', cpfNovo, nomeNovo: sessao.nomeNovo, sexoNovo: sexo, sexoEnum, regiaoCorpo: sessao.regiaoCorpo,
+    horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+  });
   return enviarMensagem(telefone, `Qual é o seu *celular* com DDD?\n\nExemplo: 11999999999`);
 }
 
@@ -465,21 +531,16 @@ async function handleCelularNovo(telefone, texto, sessao) {
   if (!id) {
     const clienteExistente = await fisiosoft.buscarClientePorCPF(sessao.cpfNovo);
     if (clienteExistente) {
-      const cliente = clienteExistente;
-      await salvarClientePorTelefone(telefone, cliente);
-      await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
-      await enviarMensagem(telefone, `✅ Encontrei seu cadastro, *${cliente.Nome}*! 😊`);
-      return enviarMensagem(telefone, `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
+      await enviarMensagem(telefone, `✅ Encontrei seu cadastro, *${clienteExistente.Nome}*! 😊`);
+      return finalizarComCliente(telefone, clienteExistente, sessao);
     }
     // Erro real ao criar cadastro — não deixa a sessão travada em aguardando_celular_novo
     await enviarMensagem(telefone, `❌ Não consegui finalizar seu cadastro agora. 😕\n\nVou te transferir para a recepção para resolver isso rapidinho.`);
     return transferirParaRecepcao(telefone);
   }
   const cliente = { Id: id, Nome: sessao.nomeNovo, Sexo: sexo };
-  await salvarClientePorTelefone(telefone, cliente);
-  await setSessao(telefone, { etapa: 'aguardando_para_quem', clienteResponsavel: cliente, regiaoCorpo: sessao.regiaoCorpo });
   await enviarMensagem(telefone, `✅ Cadastro criado, *${sessao.nomeNovo}*! 🎉`);
-  return enviarMensagem(telefone, `Este agendamento é para você ou para outra pessoa?\n\n*1.* 👤 Para mim\n*2.* 👥 Para outra pessoa`);
+  return finalizarComCliente(telefone, cliente, sessao);
 }
 
 async function handleCPFTerceiro(telefone, texto, sessao) {
@@ -489,15 +550,21 @@ async function handleCPFTerceiro(telefone, texto, sessao) {
   const cliente = await fisiosoft.buscarClientePorCPF(cpf);
   if (cliente) {
     await enviarMensagem(telefone, `✅ Cadastro de *${cliente.Nome}* encontrado! 😊`);
-    return iniciarAgendamento(telefone, cliente, sessao.regiaoCorpo);
+    return finalizarTerceiro(telefone, cliente, sessao);
   }
-  await setSessao(telefone, { etapa: 'aguardando_nome_terceiro', cpfTerceiro: cpf, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, {
+    etapa: 'aguardando_nome_terceiro', cpfTerceiro: cpf, regiaoCorpo: sessao.regiaoCorpo,
+    horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+  });
   return enviarMensagem(telefone, `Cadastro não encontrado. Qual o *nome completo* da pessoa?`);
 }
 
 async function handleNomeTerceiro(telefone, texto, sessao) {
   if (texto.length < 3) return enviarMensagem(telefone, `Informe o *nome completo*:`);
-  await setSessao(telefone, { etapa: 'aguardando_celular_terceiro', nomeTerceiro: texto, cpfTerceiro: sessao.cpfTerceiro, regiaoCorpo: sessao.regiaoCorpo });
+  await setSessao(telefone, {
+    etapa: 'aguardando_celular_terceiro', nomeTerceiro: texto, cpfTerceiro: sessao.cpfTerceiro, regiaoCorpo: sessao.regiaoCorpo,
+    horarioPendente: sessao.horarioPendente, agenda: sessao.agenda, especialidade: sessao.especialidade,
+  });
   return enviarMensagem(telefone, `Qual é o *celular* da pessoa com DDD?\n\nExemplo: 11999999999`);
 }
 
@@ -513,6 +580,15 @@ async function handleCelularTerceiro(telefone, texto, sessao) {
   }
   const cliente = { Id: id, Nome: sessao.nomeTerceiro };
   await enviarMensagem(telefone, `✅ Cadastro criado para *${sessao.nomeTerceiro}*! 🎉`);
+  return finalizarTerceiro(telefone, cliente, sessao);
+}
+
+// Depois de resolver o cadastro de "outra pessoa", finaliza direto no horário já
+// escolhido (se houver) em vez de reabrir a escolha de especialidade/período.
+async function finalizarTerceiro(telefone, cliente, sessao) {
+  if (sessao.horarioPendente) {
+    return confirmarOuRejeitarPorSexo(telefone, cliente, sessao.agenda, sessao.horarioPendente, sessao.especialidade);
+  }
   return iniciarAgendamento(telefone, cliente, sessao.regiaoCorpo);
 }
 
@@ -527,7 +603,7 @@ async function iniciarAgendamento(telefone, cliente, regiaoCorpo) {
 
 async function handleEspecialidade(telefone, texto, sessao) {
   const esp = AGENDAS[texto];
-  if (!esp) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 8.`);
+  if (!esp) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
   await registrarLead(telefone, sessao.cliente?.Nome, esp.nome);
   if (esp.periodos.length === 1) return buscarMostrarHorarios(telefone, sessao.cliente, esp.periodos[0], esp.diasBusca || 7, esp, sessao.regiaoCorpo);
   const lista = esp.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
@@ -569,11 +645,33 @@ async function handleHorario(telefone, texto, sessao) {
   }
 
   const h = sessao.horarios[i];
-  await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario: h, agenda: sessao.agenda, cliente: sessao.cliente, especialidade: sessao.especialidade });
+
+  // Se já sabemos quem é o cliente (fluxo legado), confirma direto
+  if (sessao.cliente) {
+    await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario: h, agenda: sessao.agenda, cliente: sessao.cliente, especialidade: sessao.especialidade });
+    return mostrarConfirmacao(telefone, sessao.cliente, sessao.agenda, h);
+  }
+
+  // Paciente reconhecido automaticamente pelo telefone — não precisa perguntar de novo
+  const clienteSalvo = await buscarClientePorTelefone(telefone);
+  if (clienteSalvo) {
+    await setSessao(telefone, { etapa: 'aguardando_confirmacao', horario: h, agenda: sessao.agenda, cliente: clienteSalvo, especialidade: sessao.especialidade });
+    return mostrarConfirmacao(telefone, clienteSalvo, sessao.agenda, h);
+  }
+
+  // Ainda não sabemos quem é — só agora, ao confirmar um horário específico, pedimos o cadastro
+  await setSessao(telefone, {
+    etapa: 'aguardando_tipo_cliente', acao: 'agendar', regiaoCorpo: sessao.regiaoCorpo,
+    horarioPendente: h, agenda: sessao.agenda, especialidade: sessao.especialidade,
+  });
+  return enviarMensagem(telefone, `Ótima escolha! 😊 Pra confirmar esse horário, você já é nosso paciente?\n\n*1.* ✅ Sim\n*2.* 🆕 Não, sou novo paciente\n\n_ou *0* para encerrar_`);
+}
+
+async function mostrarConfirmacao(telefone, cliente, agenda, horario) {
   return enviarMensagem(telefone,
     `📋 *Confirme o agendamento:*\n\n` +
-    `👤 ${sessao.cliente.Nome}\n💆 ${sessao.agenda.agendaNome}\n` +
-    `📅 ${h.diaSemana} ${h.data} às ${h.hora}\n\n*1* confirmar | *0* cancelar`
+    `👤 ${cliente.Nome}\n💆 ${agenda.agendaNome}\n` +
+    `📅 ${horario.diaSemana} ${horario.data} às ${horario.hora}\n\n*1* confirmar | *0* cancelar`
   );
 }
 
