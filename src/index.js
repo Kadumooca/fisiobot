@@ -3,7 +3,7 @@ const express = require('express');
 const { processarMensagem } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
-const { enviarMensagem } = require('./services/whatsapp');
+const { enviarMensagem, ehMensagemDoBot } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
 const { marcarNaoReativar } = require('./utils/clienteCache');
 const dashboardRouter = require('./routes/dashboard');
@@ -131,7 +131,28 @@ app.post('/webhook', async (req, res) => {
       }
 
       if (ETAPAS_BOT.includes(sessaoAtual.etapa)) {
-        // Mensagem do bot durante conversa ativa — ignorar
+        // A etapa sozinha não distingue "eco do bot" de "recepção digitando
+        // manualmente enquanto a sessão ainda está numa etapa ativa" — os dois
+        // casos têm a mesma etapa. Confirma pelo ID da mensagem, que é preciso.
+        const idMensagem = body.data?.key?.id;
+        const confirmadoDoBot = await ehMensagemDoBot(idMensagem);
+        if (confirmadoDoBot) {
+          // Mensagem do bot durante conversa ativa — ignorar
+          return res.sendStatus(200);
+        }
+        // ID não bate com nenhuma mensagem enviada pelo bot → é a recepção
+        // assumindo manualmente no meio de uma etapa ativa (ex: conversando_lissa)
+        console.log(`[HUMANO-DURANTE-BOT] Recepção interveio durante etapa "${sessaoAtual.etapa}" para ${telefone}`);
+        ultimaMensagemNossa.set(telefone, Date.now());
+        const textoEnviadoAgora = body.data?.message?.conversation ||
+                                  body.data?.message?.extendedTextMessage?.text || '';
+        if (detectarEncerramentoRecepcao(textoEnviadoAgora)) {
+          await marcarNaoReativar(telefone);
+          await setSessao(telefone, { etapa: 'encerrado' });
+        } else {
+          await setSessao(telefone, { etapa: 'atendimento_humano', assumido_em: new Date().toISOString() });
+        }
+        limparTimeouts(telefone);
         return res.sendStatus(200);
       }
 
