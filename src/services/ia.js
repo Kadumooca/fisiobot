@@ -129,7 +129,16 @@ async function consultarIA(historico, tentativa = 1) {
 
     const data = await response.json();
 
-    // Rate limit — aguarda e tenta novamente (até 3 tentativas)
+    // Limite DIÁRIO de tokens (TPD) — retry não adianta, pode levar dezenas de
+    // minutos pra liberar. Falha rápido em vez de fazer 3 tentativas inúteis.
+    const mensagemErro = data.error?.message || '';
+    const ehLimiteDiario = /tokens per day|TPD/i.test(mensagemErro);
+    if (data.error?.code === 'rate_limit_exceeded' && ehLimiteDiario) {
+      console.error(`[GROQ] Limite DIÁRIO de tokens atingido — sem retry. Detalhe: ${mensagemErro}`);
+      return null;
+    }
+
+    // Rate limit por minuto (transitório) — aguarda e tenta novamente (até 3 tentativas)
     if (data.error?.code === 'rate_limit_exceeded' && tentativa <= 3) {
       const espera = tentativa * 15000; // 15s, 30s, 45s
       console.log(`[GROQ] Rate limit atingido. Aguardando ${espera/1000}s antes da tentativa ${tentativa + 1}...`);
