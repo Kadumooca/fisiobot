@@ -209,13 +209,33 @@ async function processarMensagem(telefone, mensagem) {
   return handleLissa(telefone, texto, sessao);
 }
 
+// Janela dentro da qual uma segunda falha da IA é considerada "a mesma questão
+// técnica" e escalona direto pra recepção, em vez de repetir o mesmo pedido de
+// "pode repetir?" que só vai falhar de novo (ex: limite diário de tokens da Groq,
+// que pode levar dezenas de minutos pra liberar).
+const JANELA_FALHA_IA = 5 * 60 * 1000; // 5 minutos
+
+async function handleFalhaIA(telefone, sessao, campoEtapaBase) {
+  const agora = Date.now();
+  const falhouRecentemente = sessao.iaFalhouEm && (agora - sessao.iaFalhouEm) < JANELA_FALHA_IA;
+
+  if (falhouRecentemente) {
+    console.log(`[IA-ESCALONADO] ${telefone} - segunda falha da IA em menos de 5min, transferindo para recepção`);
+    await enviarMensagem(telefone, `Desculpe pelo transtorno! 😕 Estou com instabilidade técnica no momento. Vou te transferir para a recepção.`);
+    return transferirParaRecepcao(telefone);
+  }
+
+  await setSessao(telefone, { ...sessao, etapa: campoEtapaBase, iaFalhouEm: agora });
+  return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
+}
+
 async function handleLissa(telefone, texto, sessao) {
   const historico = sessao.historicoLissa || [];
   historico.push({ role: 'user', content: texto });
 
   const resposta = await consultarIA(historico);
   if (!resposta) {
-    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
+    return handleFalhaIA(telefone, sessao, 'conversando_lissa');
   }
 
   const regiao = extrairRegiao(resposta);
@@ -231,7 +251,8 @@ async function handleLissa(telefone, texto, sessao) {
   await setSessao(telefone, {
     etapa: novaEtapa,
     historicoLissa: historico,
-    regiaoCorpo: regiao || sessao.regiaoCorpo || null
+    regiaoCorpo: regiao || sessao.regiaoCorpo || null,
+    iaFalhouEm: null,
   });
 
   await enviarMensagem(telefone, respostaLimpa);
@@ -303,7 +324,7 @@ async function handleRespostaLissa(telefone, texto, sessao) {
   const resposta = await consultarIA(historico);
 
   if (!resposta) {
-    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir?`);
+    return handleFalhaIA(telefone, sessao, 'aguardando_resposta_lissa');
   }
 
   const regiao = extrairRegiao(resposta);
@@ -340,7 +361,7 @@ async function handleMenuPergunta(telefone, texto, sessao) {
 
   const resposta = await consultarIA(historico);
   if (!resposta) {
-    return enviarMensagem(telefone, `Desculpe, tive um probleminha técnico. 😅 Pode repetir sua pergunta?`);
+    return handleFalhaIA(telefone, sessao, 'aguardando_menu');
   }
 
   const encerrar = resposta.includes('[ENCERRAR]');
