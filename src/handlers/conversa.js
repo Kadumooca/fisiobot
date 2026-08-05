@@ -514,11 +514,12 @@ async function handleCPFNovo(telefone, texto, sessao) {
 }
 
 async function handleSexoNovo(telefone, texto, sessao) {
+  const t = texto.trim().toLowerCase();
   let sexo = '';
   let sexoEnum = null;
-  if (texto === '1') { sexo = 'Feminino'; sexoEnum = 1; }
-  else if (texto === '2') { sexo = 'Masculino'; sexoEnum = 2; }
-  else return enviarMensagem(telefone, `Digite *1* para Feminino ou *2* para Masculino.`);
+  if (t === '1' || t.startsWith('fem')) { sexo = 'Feminino'; sexoEnum = 1; }
+  else if (t === '2' || t.startsWith('masc')) { sexo = 'Masculino'; sexoEnum = 2; }
+  else return enviarMensagem(telefone, `Digite *1* ou *Feminino*, ou *2* ou *Masculino*.`);
   const cpfNovo = sessao.cpfNovo || sessao.cpfPreenchido;
   await setSessao(telefone, {
     etapa: 'aguardando_celular_novo', cpfNovo, nomeNovo: sessao.nomeNovo, sexoNovo: sexo, sexoEnum, regiaoCorpo: sessao.regiaoCorpo,
