@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { processarMensagem } = require('./handlers/conversa');
+const { processarMensagem, transferirParaRecepcao } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
 const { enviarMensagem, ehMensagemDoBot } = require('./services/whatsapp');
@@ -229,6 +229,20 @@ app.post('/webhook', async (req, res) => {
     return res.sendStatus(200);
   } catch (err) {
     console.error('Erro webhook:', err);
+    // Sem isso, um erro ANTES de chegar no processarMensagem (ex: falha ao
+    // carregar a sessão) deixava o paciente sem nenhuma resposta — nem a
+    // mensagem de fallback, porque esse catch é externo ao processarMensagem
+    // e não tinha esse tratamento. Tenta avisar o paciente com o telefone
+    // já extraído no início do handler (linha 97), antes de qualquer parte
+    // que possa ter falhado.
+    try {
+      const telefoneFallback = req.body?.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
+      if (telefoneFallback && !NUMEROS_INTERNOS.has(telefoneFallback) && !req.body?.data?.key?.fromMe) {
+        await transferirParaRecepcao(telefoneFallback);
+      }
+    } catch (err2) {
+      console.error('Erro no fallback do catch externo do webhook:', err2.message);
+    }
     return res.sendStatus(500);
   }
 });
