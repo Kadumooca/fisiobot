@@ -159,6 +159,24 @@ async function transferirParaRecepcao(telefone) {
 }
 
 async function processarMensagem(telefone, mensagem) {
+  try {
+    return await processarMensagemInterna(telefone, mensagem);
+  } catch (err) {
+    // Rede de segurança: qualquer exceção não tratada em qualquer handler cai
+    // aqui. Sem isso, uma falha silenciosa deixava o paciente sem resposta
+    // nenhuma (nem erro, nem fallback) — o bot simplesmente "sumia".
+    console.error(`[ERRO-FATAL] Falha ao processar mensagem de ${telefone}: ${err.message}`);
+    console.error(err.stack);
+    try {
+      await enviarMensagem(telefone, `Desculpe, tive um problema técnico agora. 😕 Vou te transferir para a recepção pra continuar seu atendimento.`);
+      return transferirParaRecepcao(telefone);
+    } catch (err2) {
+      console.error(`[ERRO-FATAL] Falha até no fallback de erro para ${telefone}: ${err2.message}`);
+    }
+  }
+}
+
+async function processarMensagemInterna(telefone, mensagem) {
   const texto = mensagem.trim();
   const textoLower = texto.toLowerCase();
   const sessao = await getSessao(telefone);
