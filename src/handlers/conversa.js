@@ -827,4 +827,4 @@ async function handleConfirmacaoCancel(telefone, texto, sessao) {
   return transferirParaRecepcao(telefone);
 }
 
-module.exports = { processarMensagem };
+module.exports = { processarMensagem, transferirParaRecepcao };
