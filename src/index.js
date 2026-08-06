@@ -107,18 +107,6 @@ app.post('/webhook', async (req, res) => {
     if (body.data?.key?.fromMe) {
       const sessaoAtual = await getSessao(telefone);
 
-      // Se a sessão está em qualquer etapa ativa do bot, a mensagem fromMe
-      // é do próprio bot — ignorar completamente, sem alterar estado.
-      const ETAPAS_BOT = [
-        'conversando_lissa', 'aguardando_menu', 'aguardando_resposta_lissa',
-        'aguardando_especialidade', 'aguardando_periodo', 'aguardando_tipo_cliente',
-        'aguardando_nome', 'aguardando_cpf', 'aguardando_horario',
-        'aguardando_confirmacao', 'aguardando_horario_busca',
-        'aguardando_para_quem', 'aguardando_nome_novo', 'aguardando_cpf_novo',
-        'aguardando_sexo_novo', 'aguardando_celular_novo', 'aguardando_nome_terceiro', 'aguardando_cpf_terceiro',
-        'aguardando_celular_terceiro'
-      ];
-
       // Sessão encerrada: webhook fromMe em até 30s = mensagem de despedida do bot → ignorar
       // Depois de 30s = lembrete manual da recepção → aplica lógica normal
       if (sessaoAtual.etapa === 'encerrado') {
@@ -130,33 +118,17 @@ app.post('/webhook', async (req, res) => {
         }
       }
 
-      if (ETAPAS_BOT.includes(sessaoAtual.etapa)) {
-        // A etapa sozinha não distingue "eco do bot" de "recepção digitando
-        // manualmente enquanto a sessão ainda está numa etapa ativa" — os dois
-        // casos têm a mesma etapa. Confirma pelo ID da mensagem, que é preciso.
-        const idMensagem = body.data?.key?.id;
-        const confirmadoDoBot = await ehMensagemDoBot(idMensagem);
-        if (confirmadoDoBot) {
-          // Mensagem do bot durante conversa ativa — ignorar
-          return res.sendStatus(200);
-        }
-        // ID não bate com nenhuma mensagem enviada pelo bot → é a recepção
-        // assumindo manualmente no meio de uma etapa ativa (ex: conversando_lissa)
-        console.log(`[HUMANO-DURANTE-BOT] Recepção interveio durante etapa "${sessaoAtual.etapa}" para ${telefone}`);
-        ultimaMensagemNossa.set(telefone, Date.now());
-        const textoEnviadoAgora = body.data?.message?.conversation ||
-                                  body.data?.message?.extendedTextMessage?.text || '';
-        if (detectarEncerramentoRecepcao(textoEnviadoAgora)) {
-          await marcarNaoReativar(telefone);
-          await setSessao(telefone, { etapa: 'encerrado' });
-        } else {
-          await setSessao(telefone, { etapa: 'atendimento_humano', assumido_em: new Date().toISOString() });
-        }
-        limparTimeouts(telefone);
+      // Verifica pelo ID da mensagem se ela foi enviada pelo próprio bot.
+      // Não depende de uma lista de nomes de etapas (que sempre fica
+      // desatualizada quando uma etapa nova é criada no conversa.js) — o ID
+      // é preciso em qualquer etapa, sempre.
+      const idMensagem = body.data?.key?.id;
+      const confirmadoDoBot = await ehMensagemDoBot(idMensagem);
+      if (confirmadoDoBot) {
         return res.sendStatus(200);
       }
 
-      // Sessão encerrada ou atendimento_humano: mensagem fromMe é da recepção
+      // Não é do bot → é a recepção assumindo manualmente, em qualquer etapa
       ultimaMensagemNossa.set(telefone, Date.now());
       console.log(`[HUMANO] Mensagem da recepção para ${telefone} (etapa: ${sessaoAtual.etapa})`);
 
