@@ -94,7 +94,22 @@ function detectarEncerramentoRecepcao(texto) {
 app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
-    const telefone = body.data?.key?.remoteJid?.replace('@s.whatsapp.net', '');
+    const remoteJidBruto = body.data?.key?.remoteJid;
+
+    // O WhatsApp às vezes entrega o mesmo evento também sob um identificador
+    // de privacidade "@lid" (Linked ID), em vez do número de telefone normal.
+    // Sem esse filtro, o sistema trata isso como um contato novo/diferente e
+    // cria uma segunda sessão paralela pra mesma pessoa — causando a Lissa se
+    // reapresentar do nada no meio da conversa e lembretes/encerramentos
+    // duplicados, porque duas sessões passam a rodar em paralelo pro mesmo
+    // paciente. A mesma mensagem sempre chega também pelo JID normal
+    // (@s.whatsapp.net), então é seguro ignorar a variante @lid.
+    if (remoteJidBruto?.endsWith('@lid')) {
+      console.log(`[LID-IGNORADO] Evento duplicado via @lid ignorado: ${remoteJidBruto}`);
+      return res.sendStatus(200);
+    }
+
+    const telefone = remoteJidBruto?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
 
     // Números internos (profissionais da clínica): bot sempre silenciado
