@@ -120,6 +120,18 @@ app.post('/webhook', async (req, res) => {
 
     // Mensagem enviada pelo WhatsApp da clínica (recepção ou bot)
     if (body.data?.key?.fromMe) {
+      // O WhatsApp/Evolution API às vezes entrega a MESMA mensagem do
+      // paciente duas vezes — uma vez normal (fromMe: false) e outra
+      // rotulada incorretamente como fromMe: true. Um humano não consegue
+      // fisicamente responder a algo que o bot ainda está com o timer de
+      // debounce de 2s rodando pra essa mesma pessoa — se isso acontecer,
+      // é quase certeza esse bug de entrega duplicada, não a recepção de
+      // verdade. Ignora em vez de silenciar o bot à toa.
+      if (mensagensPendentes.has(telefone)) {
+        console.log(`[FROMME-SUSPEITO] Evento fromMe ignorado para ${telefone} — chegou durante debounce da própria mensagem do paciente (provável entrega duplicada do WhatsApp)`);
+        return res.sendStatus(200);
+      }
+
       const sessaoAtual = await getSessao(telefone);
 
       // Sessão encerrada: webhook fromMe em até 30s = mensagem de despedida do bot → ignorar
