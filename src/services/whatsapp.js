@@ -6,6 +6,20 @@ const pool = require('../utils/db');
 const idsEnviadosPeloBot = new Set();
 const LIMITE_IDS_GUARDADOS = 1000; // aumentado para cobrir mais histórico
 
+// Reforço contra a corrida entre "o eco da nossa própria mensagem chega pelo
+// webhook" e "o ID dela termina de ser registrado" (só sabemos o ID depois
+// que a Evolution API responde ao POST). Guarda quando CADA TELEFONE recebeu
+// algo do bot pela última vez — isso é marcado ANTES mesmo do POST ser feito,
+// então não depende de round-trip nenhum. Se o eco chegar dentro de poucos
+// segundos de um envio nosso pra esse mesmo número, é o nosso próprio eco.
+const ultimoEnvioBotPorTelefone = new Map();
+const JANELA_ECO_MS = 8000; // 8s é generoso pra cobrir qualquer latência de rede
+
+function envioBotRecente(telefone) {
+  const quando = ultimoEnvioBotPorTelefone.get(telefone);
+  return !!quando && (Date.now() - quando) < JANELA_ECO_MS;
+}
+
 function registrarIdBotMemoria(id) {
   if (!id) return;
   idsEnviadosPeloBot.add(id);
@@ -57,6 +71,9 @@ async function ehMensagemDoBot(id) {
 }
 
 async function enviarMensagem(telefone, mensagem) {
+  // Marca ANTES do POST — não depende de round-trip nenhum, fecha a corrida
+  // pela raiz (ver comentário acima de ultimoEnvioBotPorTelefone).
+  ultimoEnvioBotPorTelefone.set(telefone, Date.now());
   try {
     const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
     const resposta = await axios.post(url, {
@@ -81,4 +98,4 @@ async function enviarMensagem(telefone, mensagem) {
   }
 }
 
-module.exports = { enviarMensagem, ehMensagemDoBot };
+module.exports = { enviarMensagem, ehMensagemDoBot, envioBotRecente };
