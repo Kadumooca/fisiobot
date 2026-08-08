@@ -2,6 +2,27 @@ const { enviarMensagem } = require('../services/whatsapp');
 const { buscarLeadsParaReativar, incrementarTentativaReativacao, marcarAgendou } = require('../utils/clienteCache');
 const fisiosoft = require('../services/fisiosoft');
 
+// Clínica funciona segunda a sexta, 7h às 20h (horário de São Paulo).
+// Sem essa checagem o remarketing dispara em qualquer horário que o job/cron
+// rodar, inclusive fim de semana e madrugada — usa o fuso de São Paulo
+// explicitamente (não o do servidor, que no Railway roda em UTC).
+function dentroDoHorarioComercial() {
+  const agora = new Date();
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  }).formatToParts(agora);
+
+  const hora = parseInt(partes.find(p => p.type === 'hour').value, 10);
+  const diaSemana = (partes.find(p => p.type === 'weekday').value || '').toLowerCase();
+  const diasUteis = ['seg', 'ter', 'qua', 'qui', 'sex'];
+  const ehDiaUtil = diasUteis.some(d => diaSemana.startsWith(d));
+
+  return ehDiaUtil && hora >= 7 && hora < 20;
+}
+
 const MENSAGENS = {
   1: (nome, especialidade) =>
     `Olá${nome ? ', ' + nome.split(' ')[0] : ''}! 😊 Notei que você se interessou por *${especialidade || 'nossos serviços'}* na Clínica Lituânia.\n\nAinda posso te ajudar a agendar? Temos horários disponíveis esta semana!`,
@@ -26,6 +47,10 @@ async function clienteTemAgendamentoFuturo(telefone) {
 }
 
 async function executarRemarketing() {
+  if (!dentroDoHorarioComercial()) {
+    console.log('[REMARKETING] Fora do horário comercial (seg-sex, 7h-20h) — pulando execução.');
+    return;
+  }
   try {
     const leads = await buscarLeadsParaReativar();
     if (!leads || leads.length === 0) return;
