@@ -7,6 +7,7 @@ const { enviarMensagem, ehMensagemDoBot } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
 const { marcarNaoReativar } = require('./utils/clienteCache');
 const dashboardRouter = require('./routes/dashboard');
+const pool = require('./utils/db');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -64,6 +65,20 @@ function agendarTimeoutsInatividade(telefone) {
   const t1 = setTimeout(async () => {
     const s = await getSessao(telefone);
     if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
+    // Trava atômica no banco: só quem conseguir de fato gravar o timestamp
+    // (rowCount > 0) é que manda a mensagem. Isso elimina a janela de corrida
+    // entre "ler o banco" e "escrever no banco" que existia antes — se duas
+    // instâncias do processo rodarem ao mesmo tempo (comum em deploys), só
+    // uma delas grava a tempo e a outra desiste, em vez de as duas mandarem
+    // a mensagem porque nenhuma viu a escrita da outra.
+    const { rowCount } = await pool.query(
+      `UPDATE sessoes SET dados = jsonb_set(dados, '{avisoInatividadeEm}', to_jsonb($2::text))
+       WHERE telefone = $1
+         AND (dados->>'avisoInatividadeEm' IS NULL
+              OR (dados->>'avisoInatividadeEm')::timestamptz < NOW() - INTERVAL '15 minutes')`,
+      [telefone, new Date().toISOString()]
+    );
+    if (rowCount === 0) return;
     await enviarMensagem(telefone, `Ainda está por aí? 😊 Estou aqui caso queira continuar!`);
   }, QUINZE_MIN);
 
@@ -71,8 +86,16 @@ function agendarTimeoutsInatividade(telefone) {
   const t2 = setTimeout(async () => {
     const s = await getSessao(telefone);
     if (['encerrado', 'atendimento_humano'].includes(s.etapa)) return;
+    // Mesma trava atômica pro encerramento automático (e mensagem de despedida)
+    const { rowCount } = await pool.query(
+      `UPDATE sessoes SET dados = jsonb_set(jsonb_set(dados, '{etapa}', '"encerrado"'), '{encerramentoAutoEm}', to_jsonb($2::text))
+       WHERE telefone = $1
+         AND (dados->>'encerramentoAutoEm' IS NULL
+              OR (dados->>'encerramentoAutoEm')::timestamptz < NOW() - INTERVAL '30 minutes')`,
+      [telefone, new Date().toISOString()]
+    );
+    if (rowCount === 0) return;
     await enviarMensagem(telefone, `Tudo bem! 😊 Vou encerrar por agora.\n\nQuando quiser retomar é só nos chamar com um *Olá*!`);
-    await setSessao(telefone, { etapa: 'encerrado' });
     limparTimeouts(telefone);
   }, 30 * 60 * 1000);
 
