@@ -3,7 +3,7 @@ const express = require('express');
 const { processarMensagem, transferirParaRecepcao } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
-const { enviarMensagem, ehMensagemDoBot } = require('./services/whatsapp');
+const { enviarMensagem, ehMensagemDoBot, envioBotRecente } = require('./services/whatsapp');
 const { getSessao, setSessao } = require('./utils/sessao');
 const { marcarNaoReativar } = require('./utils/clienteCache');
 const dashboardRouter = require('./routes/dashboard');
@@ -174,7 +174,7 @@ app.post('/webhook', async (req, res) => {
       // é preciso em qualquer etapa, sempre.
       const idMensagem = body.data?.key?.id;
       const confirmadoDoBot = await ehMensagemDoBot(idMensagem);
-      if (confirmadoDoBot) {
+      if (confirmadoDoBot || envioBotRecente(telefone)) {
         return res.sendStatus(200);
       }
 
