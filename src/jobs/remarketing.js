@@ -69,7 +69,15 @@ async function executarRemarketing() {
         continue;
       }
 
-      await enviarMensagem(lead.telefone, mensagem(lead.nome, lead.especialidade));
+      const idEnviado = await enviarMensagem(lead.telefone, mensagem(lead.nome, lead.especialidade));
+      if (!idEnviado) {
+        // enviarMensagem engole o próprio erro e retorna undefined em vez de
+        // lançar exceção — sem essa checagem, um envio que falhou (número
+        // inválido, Evolution fora do ar, etc.) era registrado como sucesso
+        // e o lead avançava de tentativa sem nunca ter recebido nada.
+        console.error(`[REMARKETING] Falha ao enviar para ${lead.telefone} — tentativa ${lead.tentativa} NÃO incrementada, será retentada.`);
+        continue;
+      }
       await incrementarTentativaReativacao(lead.telefone);
 
       console.log(`Remarketing enviado para ${lead.telefone} — tentativa ${lead.tentativa}`);
