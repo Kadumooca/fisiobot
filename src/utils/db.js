@@ -6,6 +6,13 @@ const pool = new Pool({
   max: 3,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000,
+  // Sem isso, conexões que ficam paradas por um tempo (madrugada, horários de
+  // baixo tráfego) podem ser derrubadas silenciosamente pela rede/provedor —
+  // o pg só descobre na hora de usar de novo, e o erro que aparece é
+  // "Connection terminated due to connection timeout". O keepAlive manda
+  // pings de TCP periódicos pra manter a conexão de fato viva.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 // Sem esse handler, um erro numa conexão ociosa do pool (ex: o Postgres
