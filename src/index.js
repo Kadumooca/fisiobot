@@ -284,6 +284,7 @@ app.post('/webhook', async (req, res) => {
       console.log(`Mensagem de ${telefone}: ${textoFinal}`);
       ultimaMensagemRecebidaEm = Date.now();
       alertaSilencioEnviado = false;
+      houveFalhaConexaoRecente = false;
 
       limparTimeouts(telefone);
       try {
@@ -427,8 +428,11 @@ async function alertarInstabilidade(motivo, jaAlertado, marcarAlertado) {
 
 // Camada 1: pergunta direto pra Evolution API se a instância está conectada.
 // Pega desconexões completas (instância caiu, precisa de novo QR code, etc.)
-// Controle de alerta PRÓPRIO — não interfere no da camada 2.
+// Continua avisando sozinha — uma desconexão real já é motivo suficiente,
+// não precisa esperar o silêncio também bater o limite.
 let alertaConexaoEnviado = false;
+let houveFalhaConexaoRecente = false; // alimenta a camada 2 (ver abaixo)
+
 async function verificarConexaoEvolutionAPI() {
   try {
     const url = `${process.env.EVOLUTION_API_URL}/instance/connectionState/${process.env.EVOLUTION_INSTANCE}`;
@@ -438,6 +442,7 @@ async function verificarConexaoEvolutionAPI() {
     });
     const estado = data?.instance?.state || data?.state;
     if (estado !== 'open') {
+      houveFalhaConexaoRecente = true;
       await alertarInstabilidade(
         `A Evolution API respondeu, mas o estado da conexão é "${estado}" (esperado: "open"). O WhatsApp pode estar desconectado.`,
         () => alertaConexaoEnviado,
@@ -447,6 +452,7 @@ async function verificarConexaoEvolutionAPI() {
       alertaConexaoEnviado = false; // conexão ok de novo — libera pra alertar se cair de novo depois
     }
   } catch (err) {
+    houveFalhaConexaoRecente = true;
     await alertarInstabilidade(
       `Não consegui consultar o status da Evolution API: ${err.message}. Ela pode estar fora do ar ou travada.`,
       () => alertaConexaoEnviado,
@@ -455,22 +461,20 @@ async function verificarConexaoEvolutionAPI() {
   }
 }
 
-// Camada 2: mesmo com a Evolution API dizendo "open", ela pode estar
-// silenciosamente falhando em repassar mensagens recebidas (foi exatamente
-// o que aconteceu no incidente do Redis instável). Se ficar tempo demais sem
-// nenhuma mensagem de paciente durante horário comercial, isso é suspeito.
-// Limite alto de propósito — só pra avisar em casos realmente fora do comum,
-// não em manhãs/dias mais parados. Controle de alerta PRÓPRIO (não
-// compartilha com a camada 1), e só reseta quando uma mensagem real chega.
+// Camada 2: silêncio de mensagens SÓ vira alerta se, durante essa mesma
+// janela, a camada 1 também tiver detectado alguma falha de conexão — ou
+// seja, precisa das DUAS evidências juntas pra soar como intervenção
+// necessária. Um dia calmo sozinho (silêncio sem nenhuma falha de conexão)
+// não gera mensagem nenhuma pro celular.
 const JANELA_SILENCIO_SUSPEITO = 2 * 60 * 60 * 1000; // 2h
 let alertaSilencioEnviado = false;
 function verificarSilencioSuspeito() {
   if (!dentroDoHorarioComercial()) return;
   const tempoSemMensagem = Date.now() - ultimaMensagemRecebidaEm;
-  if (tempoSemMensagem > JANELA_SILENCIO_SUSPEITO) {
+  if (tempoSemMensagem > JANELA_SILENCIO_SUSPEITO && houveFalhaConexaoRecente) {
     const minutos = Math.round(tempoSemMensagem / 60000);
     alertarInstabilidade(
-      `Nenhuma mensagem de paciente processada nos últimos ${minutos} minutos, em plena hora comercial. Pode ser só um dia bem calmo, mas também pode ser mensagens se perdendo antes de chegar no bot (já aconteceu por instabilidade do Redis da Evolution API).`,
+      `Nenhuma mensagem de paciente processada nos últimos ${minutos} minutos, em plena hora comercial — e a conexão com a Evolution API também apresentou falha nesse período. Forte indício de mensagens se perdendo antes de chegar no bot.`,
       () => alertaSilencioEnviado,
       () => { alertaSilencioEnviado = true; }
     );
