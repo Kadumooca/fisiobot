@@ -9,9 +9,15 @@ const transporter = nodemailer.createTransport({
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_PASS,
   },
+  // Sem isso, o nodemailer usa timeouts padrão que às vezes não bastam pra
+  // rede do Railway conversar com o Gmail, e o erro genérico "Connection
+  // timeout" aparece sem dar mais nenhuma pista do que aconteceu.
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000,
 });
 
-async function enviarResumoDiario() {
+async function enviarResumoDiario(tentativa = 1) {
   try {
     const stats = await buscarEstatisticas();
     if (!stats) return;
@@ -133,7 +139,14 @@ async function enviarResumoDiario() {
 
     console.log('Resumo diário enviado por email!');
   } catch (err) {
-    console.error('Erro resumo diário:', err.message);
+    console.error(`Erro resumo diário (tentativa ${tentativa}):`, err.message);
+    // Falha de conexão costuma ser passageira — tenta mais uma vez antes de
+    // desistir de vez e perder o relatório do dia inteiro.
+    if (tentativa < 2) {
+      console.log('[RESUMO-DIARIO] Tentando novamente em 30s...');
+      await new Promise(r => setTimeout(r, 30000));
+      return enviarResumoDiario(tentativa + 1);
+    }
   }
 }
 
