@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const axios = require('axios');
 const { processarMensagem, transferirParaRecepcao } = require('./handlers/conversa');
 const { executarRemarketing } = require('./jobs/remarketing');
 const { enviarResumoDiario } = require('./jobs/resumoDiario');
@@ -32,6 +33,11 @@ const mensagensPendentes = new Map();
 const ultimoEncerramentoBot = new Map(); // quando o bot encerrou a conversa
 const TRINTA_MIN = 30 * 60 * 1000;
 const QUINZE_MIN = 15 * 60 * 1000;
+
+// Rastreia a última vez que uma mensagem de paciente foi de fato processada,
+// pra alimentar a detecção de "silêncio suspeito" (ver monitorarSaudeConexao).
+let ultimaMensagemRecebidaEm = Date.now();
+let alertaEnviadoNestaJanela = false;
 
 const PALAVRAS_ATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_ATIVACAO = [
@@ -262,6 +268,8 @@ app.post('/webhook', async (req, res) => {
       mensagensPendentes.delete(telefone);
       const textoFinal = pendente.textos.join('\n');
       console.log(`Mensagem de ${telefone}: ${textoFinal}`);
+      ultimaMensagemRecebidaEm = Date.now();
+      alertaEnviadoNestaJanela = false;
 
       limparTimeouts(telefone);
       try {
@@ -373,6 +381,72 @@ setInterval(async () => {
   try { await executarRemarketing(); }
   catch (err) { console.error('Erro remarketing:', err); }
 }, 30 * 60 * 1000);
+
+// Horário comercial (seg-sex, 7h-20h, fuso de São Paulo) — usado pra saber se
+// um silêncio prolongado de mensagens é ou não esperado.
+function dentroDoHorarioComercial() {
+  const agora = new Date();
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false, weekday: 'short',
+  }).formatToParts(agora);
+  const hora = parseInt(partes.find(p => p.type === 'hour').value, 10);
+  const diaSemana = (partes.find(p => p.type === 'weekday').value || '').toLowerCase();
+  const diasUteis = ['seg', 'ter', 'qua', 'qui', 'sex'];
+  return diasUteis.some(d => diaSemana.startsWith(d)) && hora >= 7 && hora < 20;
+}
+
+async function alertarInstabilidade(motivo) {
+  const numeroAlerta = process.env.NUMERO_ALERTA;
+  console.error(`[ALERTA-INSTABILIDADE] ${motivo}`);
+  if (!numeroAlerta) {
+    console.error('[ALERTA-INSTABILIDADE] NUMERO_ALERTA não configurado — alerta ficou só no log.');
+    return;
+  }
+  if (alertaEnviadoNestaJanela) return; // evita spam repetido pro mesmo episódio
+  alertaEnviadoNestaJanela = true;
+  try {
+    await enviarMensagem(numeroAlerta, `⚠️ *Alerta FisioBot*\n\n${motivo}\n\nVale checar o WhatsApp da clínica manualmente e a conexão da Evolution API no Railway.`);
+  } catch (err) {
+    console.error('[ALERTA-INSTABILIDADE] Falha ao enviar o próprio alerta:', err.message);
+  }
+}
+
+// Camada 1: pergunta direto pra Evolution API se a instância está conectada.
+// Pega desconexões completas (instância caiu, precisa de novo QR code, etc.)
+async function verificarConexaoEvolutionAPI() {
+  try {
+    const url = `${process.env.EVOLUTION_API_URL}/instance/connectionState/${process.env.EVOLUTION_INSTANCE}`;
+    const { data } = await axios.get(url, {
+      headers: { apikey: process.env.EVOLUTION_API_KEY },
+      timeout: 8000,
+    });
+    const estado = data?.instance?.state || data?.state;
+    if (estado !== 'open') {
+      await alertarInstabilidade(`A Evolution API respondeu, mas o estado da conexão é "${estado}" (esperado: "open"). O WhatsApp pode estar desconectado.`);
+    } else {
+      alertaEnviadoNestaJanela = false; // conexão ok de novo — libera pra alertar se cair de novo depois
+    }
+  } catch (err) {
+    await alertarInstabilidade(`Não consegui consultar o status da Evolution API: ${err.message}. Ela pode estar fora do ar ou travada.`);
+  }
+}
+
+// Camada 2: mesmo com a Evolution API dizendo "open", ela pode estar
+// silenciosamente falhando em repassar mensagens recebidas (foi exatamente
+// o que aconteceu no incidente do Redis instável). Se ficar tempo demais sem
+// nenhuma mensagem de paciente durante horário comercial, isso é suspeito.
+const JANELA_SILENCIO_SUSPEITO = 45 * 60 * 1000; // 45min
+function verificarSilencioSuspeito() {
+  if (!dentroDoHorarioComercial()) return;
+  const tempoSemMensagem = Date.now() - ultimaMensagemRecebidaEm;
+  if (tempoSemMensagem > JANELA_SILENCIO_SUSPEITO) {
+    const minutos = Math.round(tempoSemMensagem / 60000);
+    alertarInstabilidade(`Nenhuma mensagem de paciente processada nos últimos ${minutos} minutos, em plena hora comercial. Pode ser só um dia calmo, mas também pode ser mensagens se perdendo antes de chegar no bot (já aconteceu por instabilidade do Redis da Evolution API).`);
+  }
+}
+
+setInterval(verificarConexaoEvolutionAPI, 10 * 60 * 1000);
+setInterval(verificarSilencioSuspeito, 10 * 60 * 1000);
 
 function agendarResumoDiario() {
   const agora = new Date();
