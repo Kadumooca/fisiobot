@@ -138,6 +138,21 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // Quando a Evolution API reconecta ao WhatsApp (ex: depois de um restart),
+    // o WhatsApp reenvia um histórico de mensagens antigas pelo mesmo webhook,
+    // como se fossem eventos novos. Sem essa checagem, isso reabre em massa
+    // conversas antigas pra "atendimento_humano" (inclusive já encerradas há
+    // dias) só porque uma resposta antiga da recepção foi "relembrada" pelo
+    // WhatsApp — e nada disso é uma interação real acontecendo agora.
+    const messageTimestamp = body.data?.messageTimestamp;
+    if (messageTimestamp) {
+      const idadeSegundos = Date.now() / 1000 - Number(messageTimestamp);
+      if (idadeSegundos > 60) {
+        console.log(`[HISTORICO-IGNORADO] Evento com ${Math.round(idadeSegundos)}s de idade ignorado — replay de histórico, não mensagem ao vivo.`);
+        return res.sendStatus(200);
+      }
+    }
+
     const telefone = remoteJidBruto?.replace('@s.whatsapp.net', '');
     if (!telefone) return res.sendStatus(200);
 
