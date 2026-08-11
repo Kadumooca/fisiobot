@@ -37,7 +37,6 @@ const QUINZE_MIN = 15 * 60 * 1000;
 // Rastreia a última vez que uma mensagem de paciente foi de fato processada,
 // pra alimentar a detecção de "silêncio suspeito" (ver monitorarSaudeConexao).
 let ultimaMensagemRecebidaEm = Date.now();
-let alertaEnviadoNestaJanela = false;
 
 const PALAVRAS_ATIVACAO = ['olá', 'ola', 'oi', 'bom dia', 'boa tarde', 'boa noite'];
 const FRASES_ATIVACAO = [
@@ -284,7 +283,7 @@ app.post('/webhook', async (req, res) => {
       const textoFinal = pendente.textos.join('\n');
       console.log(`Mensagem de ${telefone}: ${textoFinal}`);
       ultimaMensagemRecebidaEm = Date.now();
-      alertaEnviadoNestaJanela = false;
+      alertaSilencioEnviado = false;
 
       limparTimeouts(telefone);
       try {
@@ -410,15 +409,15 @@ function dentroDoHorarioComercial() {
   return diasUteis.some(d => diaSemana.startsWith(d)) && hora >= 7 && hora < 20;
 }
 
-async function alertarInstabilidade(motivo) {
+async function alertarInstabilidade(motivo, jaAlertado, marcarAlertado) {
   const numeroAlerta = process.env.NUMERO_ALERTA;
   console.error(`[ALERTA-INSTABILIDADE] ${motivo}`);
   if (!numeroAlerta) {
     console.error('[ALERTA-INSTABILIDADE] NUMERO_ALERTA não configurado — alerta ficou só no log.');
     return;
   }
-  if (alertaEnviadoNestaJanela) return; // evita spam repetido pro mesmo episódio
-  alertaEnviadoNestaJanela = true;
+  if (jaAlertado()) return; // evita repetir pro mesmo episódio em andamento
+  marcarAlertado();
   try {
     await enviarMensagem(numeroAlerta, `⚠️ *Alerta FisioBot*\n\n${motivo}\n\nVale checar o WhatsApp da clínica manualmente e a conexão da Evolution API no Railway.`);
   } catch (err) {
@@ -428,6 +427,8 @@ async function alertarInstabilidade(motivo) {
 
 // Camada 1: pergunta direto pra Evolution API se a instância está conectada.
 // Pega desconexões completas (instância caiu, precisa de novo QR code, etc.)
+// Controle de alerta PRÓPRIO — não interfere no da camada 2.
+let alertaConexaoEnviado = false;
 async function verificarConexaoEvolutionAPI() {
   try {
     const url = `${process.env.EVOLUTION_API_URL}/instance/connectionState/${process.env.EVOLUTION_INSTANCE}`;
@@ -437,12 +438,20 @@ async function verificarConexaoEvolutionAPI() {
     });
     const estado = data?.instance?.state || data?.state;
     if (estado !== 'open') {
-      await alertarInstabilidade(`A Evolution API respondeu, mas o estado da conexão é "${estado}" (esperado: "open"). O WhatsApp pode estar desconectado.`);
+      await alertarInstabilidade(
+        `A Evolution API respondeu, mas o estado da conexão é "${estado}" (esperado: "open"). O WhatsApp pode estar desconectado.`,
+        () => alertaConexaoEnviado,
+        () => { alertaConexaoEnviado = true; }
+      );
     } else {
-      alertaEnviadoNestaJanela = false; // conexão ok de novo — libera pra alertar se cair de novo depois
+      alertaConexaoEnviado = false; // conexão ok de novo — libera pra alertar se cair de novo depois
     }
   } catch (err) {
-    await alertarInstabilidade(`Não consegui consultar o status da Evolution API: ${err.message}. Ela pode estar fora do ar ou travada.`);
+    await alertarInstabilidade(
+      `Não consegui consultar o status da Evolution API: ${err.message}. Ela pode estar fora do ar ou travada.`,
+      () => alertaConexaoEnviado,
+      () => { alertaConexaoEnviado = true; }
+    );
   }
 }
 
@@ -450,13 +459,21 @@ async function verificarConexaoEvolutionAPI() {
 // silenciosamente falhando em repassar mensagens recebidas (foi exatamente
 // o que aconteceu no incidente do Redis instável). Se ficar tempo demais sem
 // nenhuma mensagem de paciente durante horário comercial, isso é suspeito.
-const JANELA_SILENCIO_SUSPEITO = 45 * 60 * 1000; // 45min
+// Limite alto de propósito — só pra avisar em casos realmente fora do comum,
+// não em manhãs/dias mais parados. Controle de alerta PRÓPRIO (não
+// compartilha com a camada 1), e só reseta quando uma mensagem real chega.
+const JANELA_SILENCIO_SUSPEITO = 2 * 60 * 60 * 1000; // 2h
+let alertaSilencioEnviado = false;
 function verificarSilencioSuspeito() {
   if (!dentroDoHorarioComercial()) return;
   const tempoSemMensagem = Date.now() - ultimaMensagemRecebidaEm;
   if (tempoSemMensagem > JANELA_SILENCIO_SUSPEITO) {
     const minutos = Math.round(tempoSemMensagem / 60000);
-    alertarInstabilidade(`Nenhuma mensagem de paciente processada nos últimos ${minutos} minutos, em plena hora comercial. Pode ser só um dia calmo, mas também pode ser mensagens se perdendo antes de chegar no bot (já aconteceu por instabilidade do Redis da Evolution API).`);
+    alertarInstabilidade(
+      `Nenhuma mensagem de paciente processada nos últimos ${minutos} minutos, em plena hora comercial. Pode ser só um dia bem calmo, mas também pode ser mensagens se perdendo antes de chegar no bot (já aconteceu por instabilidade do Redis da Evolution API).`,
+      () => alertaSilencioEnviado,
+      () => { alertaSilencioEnviado = true; }
+    );
   }
 }
 
