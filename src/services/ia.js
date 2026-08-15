@@ -160,9 +160,10 @@ async function consultarIA(historico, tentativa = 1) {
   }
 }
 
-// Fallback gratuito quando a Groq está indisponível ou bateu no limite diário.
-// Mesmo modelo (Llama 3.3 70B), API compatível, cota diária própria e bem
-// mais generosa (1M tokens/dia contra 100K da Groq) — sem custo.
+// Fallback quando a Groq está indisponível ou bateu no limite diário.
+// Groq agora roda openai/gpt-oss-120b (migração de 16/08/2026); a Cerebras
+// segue no Llama 3.3 70B — modelo diferente, API compatível. Conta Cerebras
+// com $5 de crédito gratuito inicial (não é cota ilimitada — acompanhar saldo).
 async function consultarCerebras(historico) {
   if (!process.env.CEREBRAS_API_KEY) {
     console.error('[CEREBRAS] CEREBRAS_API_KEY não configurada — sem fallback disponível.');
