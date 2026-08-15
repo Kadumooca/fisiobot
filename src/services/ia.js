@@ -130,7 +130,7 @@ async function consultarIA(historico, tentativa = 1) {
 
     // Limite DIÁRIO de tokens (TPD) — retry na própria Groq não adianta, pode
     // levar dezenas de minutos pra liberar. Em vez de desistir na hora, tenta
-    // a Cerebras (mesmo modelo Llama 3.3 70B, cota diária própria e separada
+    // a Cerebras (mesmo modelo gpt-oss-120b, cota/billing próprios e separados
     // da Groq) antes de escalar pra recepção.
     const mensagemErro = data.error?.message || '';
     const ehLimiteDiario = /tokens per day|TPD/i.test(mensagemErro);
@@ -161,9 +161,9 @@ async function consultarIA(historico, tentativa = 1) {
 }
 
 // Fallback quando a Groq está indisponível ou bateu no limite diário.
-// Groq agora roda openai/gpt-oss-120b (migração de 16/08/2026); a Cerebras
-// segue no Llama 3.3 70B — modelo diferente, API compatível. Conta Cerebras
-// com $5 de crédito gratuito inicial (não é cota ilimitada — acompanhar saldo).
+// Roda o mesmo modelo da Groq (gpt-oss-120b) — llama-3.3-70b foi
+// descontinuado pela Cerebras em 16/02/2026 e não existe mais na API.
+// Conta Cerebras com $5 de crédito gratuito inicial (acompanhar saldo).
 async function consultarCerebras(historico) {
   if (!process.env.CEREBRAS_API_KEY) {
     console.error('[CEREBRAS] CEREBRAS_API_KEY não configurada — sem fallback disponível.');
@@ -177,7 +177,7 @@ async function consultarCerebras(historico) {
         'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b',
+        model: 'gpt-oss-120b', // mesmo modelo da Groq (openai/gpt-oss-120b) — llama-3.3-70b foi descontinuado pela Cerebras em 16/02/2026
         max_completion_tokens: 150,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
