@@ -116,7 +116,8 @@ async function consultarIA(historico, tentativa = 1) {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b', // migrado de llama-3.3-70b-versatile (descontinuado pela Groq em 16/08/2026)
+        reasoning_effort: 'low', // respostas curtas e rápidas — não precisa de raciocínio elaborado
         max_tokens: 150,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
@@ -127,13 +128,15 @@ async function consultarIA(historico, tentativa = 1) {
 
     const data = await response.json();
 
-    // Limite DIÁRIO de tokens (TPD) — retry não adianta, pode levar dezenas de
-    // minutos pra liberar. Falha rápido em vez de fazer 3 tentativas inúteis.
+    // Limite DIÁRIO de tokens (TPD) — retry na própria Groq não adianta, pode
+    // levar dezenas de minutos pra liberar. Em vez de desistir na hora, tenta
+    // a Cerebras (mesmo modelo Llama 3.3 70B, cota diária própria e separada
+    // da Groq) antes de escalar pra recepção.
     const mensagemErro = data.error?.message || '';
     const ehLimiteDiario = /tokens per day|TPD/i.test(mensagemErro);
     if (data.error?.code === 'rate_limit_exceeded' && ehLimiteDiario) {
-      console.error(`[GROQ] Limite DIÁRIO de tokens atingido — sem retry. Detalhe: ${mensagemErro}`);
-      return null;
+      console.error(`[GROQ] Limite DIÁRIO de tokens atingido — tentando Cerebras como fallback. Detalhe: ${mensagemErro}`);
+      return consultarCerebras(historico);
     }
 
     // Rate limit por minuto (transitório) — aguarda e tenta novamente (até 3 tentativas)
@@ -145,14 +148,54 @@ async function consultarIA(historico, tentativa = 1) {
     }
 
     if (!data.choices) {
-      console.error('Resposta Groq sem choices:', JSON.stringify(data));
-      return null;
+      console.error('Resposta Groq sem choices:', JSON.stringify(data), '— tentando Cerebras como fallback.');
+      return consultarCerebras(historico);
     }
 
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
-    console.error('Erro ao consultar IA:', err.message);
+    console.error('Erro ao consultar IA (Groq):', err.message);
     console.error('Stack:', err.stack);
+    return consultarCerebras(historico);
+  }
+}
+
+// Fallback gratuito quando a Groq está indisponível ou bateu no limite diário.
+// Mesmo modelo (Llama 3.3 70B), API compatível, cota diária própria e bem
+// mais generosa (1M tokens/dia contra 100K da Groq) — sem custo.
+async function consultarCerebras(historico) {
+  if (!process.env.CEREBRAS_API_KEY) {
+    console.error('[CEREBRAS] CEREBRAS_API_KEY não configurada — sem fallback disponível.');
+    return null;
+  }
+  try {
+    const response = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b',
+        max_completion_tokens: 150,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...historico,
+        ],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.choices) {
+      console.error('[CEREBRAS] Resposta sem choices:', JSON.stringify(data));
+      return null;
+    }
+
+    console.log('[CEREBRAS] Resposta gerada via fallback (Groq indisponível no momento).');
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    console.error('[CEREBRAS] Erro ao consultar fallback:', err.message);
     return null;
   }
 }
