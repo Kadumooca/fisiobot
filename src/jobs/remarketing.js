@@ -23,13 +23,27 @@ function dentroDoHorarioComercial() {
   return ehDiaUtil && hora >= 7 && hora < 20;
 }
 
+// Contatos sem cadastro no WhatsApp chegam com o placeholder "Desconhecido"
+// como nome (definido no clienteCache) — sem esse filtro, as mensagens
+// abaixo tratavam essa string como um nome real e mandavam "Oi, Desconhecido!".
+function primeiroNome(nome) {
+  if (!nome || nome.trim().toLowerCase() === 'desconhecido') return null;
+  return nome.split(' ')[0];
+}
+
 const MENSAGENS = {
-  1: (nome, especialidade) =>
-    `Olá${nome ? ', ' + nome.split(' ')[0] : ''}! 😊 Notei que você se interessou por *${especialidade || 'nossos serviços'}* na Clínica Lituânia.\n\nAinda posso te ajudar a agendar? Temos horários disponíveis esta semana!`,
-  2: (nome, especialidade) =>
-    `Oi${nome ? ', ' + nome.split(' ')[0] : ''}! 👋 Passando para lembrar que na *Clínica Lituânia* temos ótimos profissionais prontos para te atender em *${especialidade || 'fisioterapia'}*.\n\nQue tal garantir seu horário agora?`,
-  3: (nome, especialidade) =>
-    `${nome ? nome.split(' ')[0] + ', ' : ''}queremos muito te receber na *Clínica Lituânia*! 😊\n\nEsta é nossa última mensagem automática. Se quiser agendar sua consulta de *${especialidade || 'fisioterapia'}*, é só responder *Olá* quando estiver pronto!\n\nEsperamos por você! 🙏`,
+  1: (nome, especialidade) => {
+    const primeiro = primeiroNome(nome);
+    return `Olá${primeiro ? ', ' + primeiro : ''}! 😊 Notei que você se interessou por *${especialidade || 'nossos serviços'}* na Clínica Lituânia.\n\nAinda posso te ajudar a agendar? Temos horários disponíveis esta semana!`;
+  },
+  2: (nome, especialidade) => {
+    const primeiro = primeiroNome(nome);
+    return `Oi${primeiro ? ', ' + primeiro : ''}! 👋 Passando para lembrar que na *Clínica Lituânia* temos ótimos profissionais prontos para te atender em *${especialidade || 'fisioterapia'}*.\n\nQue tal garantir seu horário agora?`;
+  },
+  3: (nome, especialidade) => {
+    const primeiro = primeiroNome(nome);
+    return `${primeiro ? primeiro + ', ' : ''}queremos muito te receber na *Clínica Lituânia*! 😊\n\nEsta é nossa última mensagem automática. Se quiser agendar sua consulta de *${especialidade || 'fisioterapia'}*, é só responder *Olá* quando estiver pronto!\n\nEsperamos por você! 🙏`;
+  },
 };
 
 async function clienteTemAgendamentoFuturo(telefone) {
