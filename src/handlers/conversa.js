@@ -295,7 +295,15 @@ async function handleLissa(telefone, texto, sessao) {
 async function handleRespostaLissa(telefone, texto, sessao) {
   const textoLower = texto.toLowerCase().trim();
 
-  const ehSim = [
+  // Tokens curtos (1-2 letras) só podem ser comparados por igualdade exata,
+  // nunca por .includes() — senão combinam com qualquer palavra que contenha
+  // essas letras (ex: "si" dentro de "assim", "positivo"). Adicionado após
+  // caso real: paciente respondeu "Si" (faltou o "m" de "Sim") e não foi
+  // reconhecido como confirmação, deixando o agendamento travado.
+  const PALAVRAS_SIM_EXATAS = ['si'];
+  const ehSimExato = PALAVRAS_SIM_EXATAS.some(p => textoLower === p);
+
+  const ehSim = ehSimExato || [
     'sim', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos', 'pode ser',
     'quero sim', 'gostaria', 'aceito', 'topo', 'vamos lá', 'por favor',
     'quero marcar', 'quero agendar', 'quero avaliação', 'quero uma avaliação',
@@ -346,8 +354,23 @@ async function handleRespostaLissa(telefone, texto, sessao) {
   }
 
   const regiao = extrairRegiao(resposta);
+  // Rede de segurança: mesmo em resposta "fora do contexto", se a IA disser
+  // [ABRIR_MENU] o menu precisa abrir de verdade — antes, essa tag era só
+  // removida do texto (limparIA) e nunca disparava a ação real, deixando o
+  // paciente com uma promessa de horários que nunca chegava.
+  const abrirMenu = resposta.includes('[ABRIR_MENU]');
   const respostaLimpa = limparIA(resposta);
   historico.push({ role: 'assistant', content: resposta });
+
+  if (abrirMenu) {
+    await setSessao(telefone, {
+      etapa: 'aguardando_menu',
+      historicoLissa: historico,
+      regiaoCorpo: regiao || sessao.regiaoCorpo || null,
+    });
+    await enviarMensagem(telefone, respostaLimpa);
+    return enviarMensagem(telefone, MENU);
+  }
 
   await setSessao(telefone, {
     etapa: 'aguardando_resposta_lissa',
