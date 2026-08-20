@@ -123,7 +123,9 @@ async function consultarIA(historico, tentativa = 1) {
       body: JSON.stringify({
         model: 'openai/gpt-oss-120b', // migrado de llama-3.3-70b-versatile (descontinuado pela Groq em 16/08/2026)
         reasoning_effort: 'low', // respostas curtas e rápidas — não precisa de raciocínio elaborado
-        max_tokens: 150,
+        max_tokens: 500, // gpt-oss-120b consome tokens de raciocínio interno do mesmo orçamento —
+        // 150 causava corte no meio da resposta (ex: "mensal 2" sem terminar a frase).
+        // O texto final continua curto por instrução do prompt; a folga é só pro raciocínio.
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...historico,
@@ -183,7 +185,7 @@ async function consultarCerebras(historico) {
       },
       body: JSON.stringify({
         model: 'gpt-oss-120b', // mesmo modelo da Groq (openai/gpt-oss-120b) — llama-3.3-70b foi descontinuado pela Cerebras em 16/02/2026
-        max_completion_tokens: 150,
+        max_completion_tokens: 500, // mesmo ajuste do Groq — gpt-oss-120b usa tokens de raciocínio do mesmo orçamento
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...historico,
