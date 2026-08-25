@@ -359,6 +359,13 @@ async function handleRespostaLissa(telefone, texto, sessao) {
   // removida do texto (limparIA) e nunca disparava a ação real, deixando o
   // paciente com uma promessa de horários que nunca chegava.
   const abrirMenu = resposta.includes('[ABRIR_MENU]');
+  // Mesma lógica pra [ENCERRAR]: frases de recusa completas (ex: "No momento
+  // não, muito obrigada pela atenção!") não batem com a lista curta de
+  // FRASES_NAO acima e caem aqui. Sem essa checagem, a IA se despedia
+  // corretamente no texto mas a sessão continuava "aguardando resposta" e o
+  // lead nunca era marcado como não-reativar — o remarketing seguia
+  // mandando as próximas tentativas pra quem já tinha recusado.
+  const encerrar = resposta.includes('[ENCERRAR]');
   const respostaLimpa = limparIA(resposta);
   historico.push({ role: 'assistant', content: resposta });
 
@@ -370,6 +377,13 @@ async function handleRespostaLissa(telefone, texto, sessao) {
     });
     await enviarMensagem(telefone, respostaLimpa);
     return enviarMensagem(telefone, MENU);
+  }
+
+  if (encerrar) {
+    await marcarNaoReativar(telefone);
+    if (global.registrarEncerramentoBot) global.registrarEncerramentoBot(telefone);
+    await setSessao(telefone, { etapa: 'encerrado' });
+    return enviarMensagem(telefone, respostaLimpa);
   }
 
   await setSessao(telefone, {
