@@ -136,6 +136,24 @@ async function marcarNaoReativar(telefone) {
   }
 }
 
+// Ativa o mecanismo que já existia em marcarRespondeuRemarketing mas nunca era
+// disparado: sem isso, o remarketing seguia tentativa 1 → 2 → 3 no cronograma
+// fixo mesmo quando o lead não respondia nada à tentativa anterior. Ao marcar
+// status='remarketing' logo após o envio, buscarLeadsParaReativar (que só
+// busca status IN ('lead','respondeu')) para de considerar esse lead — só
+// volta a receber remarketing se responder algo (o que já reativa o status
+// via marcarRespondeuRemarketing, existente).
+async function marcarRemarketingEnviado(telefone) {
+  try {
+    await pool.query(
+      `UPDATE leads SET status = 'remarketing', atualizado_em = NOW() WHERE telefone = $1`,
+      [telefone]
+    );
+  } catch (err) {
+    console.error('Erro marcarRemarketingEnviado:', err.message);
+  }
+}
+
 async function marcarRespondeuRemarketing(telefone) {
   try {
     await pool.query(
@@ -261,6 +279,7 @@ module.exports = {
   marcarEncerrado,
   marcarNaoReativar,
   marcarRespondeuRemarketing,
+  marcarRemarketingEnviado,
   buscarLeadsParaReativar,
   incrementarTentativaReativacao,
   buscarEstatisticas,
