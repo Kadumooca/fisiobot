@@ -249,6 +249,12 @@ async function handleFalhaIA(telefone, sessao, campoEtapaBase) {
 
 async function handleLissa(telefone, texto, sessao) {
   const historico = sessao.historicoLissa || [];
+  // Sem histórico = primeira mensagem da conversa. A regra 0 do prompt pede
+  // que a Lissa se apresente antes de responder, mas depender só da IA
+  // seguir isso é inconsistente — em mensagens longas/detalhadas ela às
+  // vezes pula direto pra resposta. Por isso a saudação é garantida aqui
+  // por código, e só complementada pela IA (nunca duplicada).
+  const ehPrimeiraMensagem = historico.length === 0;
   historico.push({ role: 'user', content: texto });
 
   const resposta = await consultarIA(historico);
@@ -260,7 +266,11 @@ async function handleLissa(telefone, texto, sessao) {
   const ofereceAgendamento = resposta.includes('[OFERECER_AGENDAMENTO]');
   const encerrar = resposta.includes('[ENCERRAR]');
   const abrirMenu = resposta.includes('[ABRIR_MENU]');
-  const respostaLimpa = limparIA(resposta);
+  let respostaLimpa = limparIA(resposta);
+
+  if (ehPrimeiraMensagem && !/^ol[áa]!?\s*(,)?\s*sou\s+a\s+lissa/i.test(respostaLimpa.trim())) {
+    respostaLimpa = `Olá! Sou a Lissa, atendente virtual. 😊\n\n${respostaLimpa}`;
+  }
 
   historico.push({ role: 'assistant', content: resposta });
 
