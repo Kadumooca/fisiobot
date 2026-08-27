@@ -1,5 +1,5 @@
 const { enviarMensagem } = require('../services/whatsapp');
-const { buscarLeadsParaReativar, incrementarTentativaReativacao, marcarAgendou } = require('../utils/clienteCache');
+const { buscarLeadsParaReativar, incrementarTentativaReativacao, marcarAgendou, marcarRemarketingEnviado } = require('../utils/clienteCache');
 const fisiosoft = require('../services/fisiosoft');
 
 // Clínica funciona segunda a sexta, 7h às 20h (horário de São Paulo).
@@ -93,6 +93,7 @@ async function executarRemarketing() {
         continue;
       }
       await incrementarTentativaReativacao(lead.telefone);
+      await marcarRemarketingEnviado(lead.telefone);
 
       console.log(`Remarketing enviado para ${lead.telefone} — tentativa ${lead.tentativa}`);
       await new Promise(r => setTimeout(r, 1000));
