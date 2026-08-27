@@ -128,6 +128,17 @@ async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7, sexo = nu
   return horarios;
 }
 
+// O modelo às vezes gera as tags de controle com colchetes largos/CJK
+// (【 】, U+3010/U+3011) em vez de colchetes ASCII normais ([ ]). Como toda
+// a detecção de tags abaixo (.includes, regex) espera só ASCII, isso causava
+// dois problemas: a tag vazava visível pro paciente (ex: "【REGIAO:geral】")
+// E a ação correspondente (abrir menu, encerrar, oferecer agendamento)
+// silenciosamente não disparava. Normaliza logo após receber a resposta,
+// antes de qualquer checagem de tag.
+function normalizarColchetes(texto) {
+  return texto.replace(/【/g, '[').replace(/】/g, ']');
+}
+
 function limparIA(texto) {
   return texto
     .replace(/\[REGIAO\s*:\s*[^\]]*\]/gi, '')
@@ -257,10 +268,11 @@ async function handleLissa(telefone, texto, sessao) {
   const ehPrimeiraMensagem = historico.length === 0;
   historico.push({ role: 'user', content: texto });
 
-  const resposta = await consultarIA(historico);
+  let resposta = await consultarIA(historico);
   if (!resposta) {
     return handleFalhaIA(telefone, sessao, 'conversando_lissa');
   }
+  resposta = normalizarColchetes(resposta);
 
   const regiao = extrairRegiao(resposta);
   const ofereceAgendamento = resposta.includes('[OFERECER_AGENDAMENTO]');
@@ -357,11 +369,12 @@ async function handleRespostaLissa(telefone, texto, sessao) {
   // Resposta fora do contexto — Lissa responde e mantém aguardando
   const historico = sessao.historicoLissa || [];
   historico.push({ role: 'user', content: texto });
-  const resposta = await consultarIA(historico);
+  let resposta = await consultarIA(historico);
 
   if (!resposta) {
     return handleFalhaIA(telefone, sessao, 'aguardando_resposta_lissa');
   }
+  resposta = normalizarColchetes(resposta);
 
   const regiao = extrairRegiao(resposta);
   // Rede de segurança: mesmo em resposta "fora do contexto", se a IA disser
@@ -424,10 +437,11 @@ async function handleMenuPergunta(telefone, texto, sessao) {
   const historico = sessao.historicoLissa || [];
   historico.push({ role: 'user', content: texto });
 
-  const resposta = await consultarIA(historico);
+  let resposta = await consultarIA(historico);
   if (!resposta) {
     return handleFalhaIA(telefone, sessao, 'aguardando_menu');
   }
+  resposta = normalizarColchetes(resposta);
 
   const encerrar = resposta.includes('[ENCERRAR]');
   const respostaLimpa = limparIA(resposta);
