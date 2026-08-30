@@ -221,28 +221,31 @@ async function incrementarTentativaReativacao(telefone) {
   }
 }
 
-async function buscarEstatisticas() {
+async function buscarEstatisticas(dias = 30) {
   try {
-    const total = await pool.query(`SELECT COUNT(*) FROM conversas WHERE criado_em > NOW() - INTERVAL '30 days'`);
+    const total = await pool.query(`SELECT COUNT(*) FROM conversas WHERE criado_em > NOW() - ($1 || ' days')::interval`, [dias]);
     const ativas = await pool.query(`SELECT COUNT(*) FROM conversas WHERE status = 'ativa'`);
-    const agendamentos = await pool.query(`SELECT COUNT(*) FROM conversas WHERE agendou = TRUE AND criado_em > NOW() - INTERVAL '30 days'`);
-    const humanos = await pool.query(`SELECT COUNT(*) FROM conversas WHERE transferido_humano = TRUE AND criado_em > NOW() - INTERVAL '30 days'`);
-    const leads = await pool.query(`SELECT COUNT(*) FROM leads WHERE status = 'lead' AND criado_em > NOW() - INTERVAL '30 days'`);
+    const agendamentos = await pool.query(`SELECT COUNT(*) FROM conversas WHERE agendou = TRUE AND criado_em > NOW() - ($1 || ' days')::interval`, [dias]);
+    const humanos = await pool.query(`SELECT COUNT(*) FROM conversas WHERE transferido_humano = TRUE AND criado_em > NOW() - ($1 || ' days')::interval`, [dias]);
+    const leads = await pool.query(`SELECT COUNT(*) FROM leads WHERE status = 'lead' AND criado_em > NOW() - ($1 || ' days')::interval`, [dias]);
     const naoRespondidos = await pool.query(`
       SELECT COUNT(*) FROM leads
       WHERE status IN ('lead', 'respondeu')
       AND ultima_mensagem_em < NOW() - INTERVAL '2 hours'
     `);
+    // Antes travado em 7 dias fixos — agora acompanha o mesmo período
+    // selecionado no dashboard (7/30/90 dias), pra dar visão de tendência
+    // real em vez de só uma semana isolada.
     const porDia = await pool.query(`
       SELECT DATE(criado_em) as dia, COUNT(*) as total
-      FROM conversas WHERE criado_em > NOW() - INTERVAL '7 days'
+      FROM conversas WHERE criado_em > NOW() - ($1 || ' days')::interval
       GROUP BY DATE(criado_em) ORDER BY dia ASC
-    `);
+    `, [dias]);
     const porEspecialidade = await pool.query(`
       SELECT especialidade, COUNT(*) as total FROM leads
-      WHERE criado_em > NOW() - INTERVAL '30 days'
+      WHERE criado_em > NOW() - ($1 || ' days')::interval
       GROUP BY especialidade ORDER BY total DESC
-    `);
+    `, [dias]);
     const leadsNaoConvertidos = await pool.query(`
       SELECT DISTINCT ON (telefone) telefone, nome, especialidade, ultima_mensagem_em, tentativas_reativacao
       FROM leads
@@ -253,6 +256,7 @@ async function buscarEstatisticas() {
     `);
 
     return {
+      dias,
       total: parseInt(total.rows[0].count),
       ativas: parseInt(ativas.rows[0].count),
       agendamentos: parseInt(agendamentos.rows[0].count),
