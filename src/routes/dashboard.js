@@ -27,7 +27,14 @@ router.get('/', autenticar, async (req, res) => {
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
 
-  const stats = await buscarEstatisticas();
+  // Seletor de período (?dias=7|30|90) — antes o gráfico ficava travado em
+  // 7 dias fixos, escondendo tendências reais (ex: efeito de uma mudança de
+  // campanha) que só aparecem olhando um recorte maior.
+  const PERIODOS_VALIDOS = [7, 30, 90];
+  const diasSolicitado = parseInt(req.query.dias, 10);
+  const dias = PERIODOS_VALIDOS.includes(diasSolicitado) ? diasSolicitado : 30;
+
+  const stats = await buscarEstatisticas(dias);
   if (!stats) return res.status(500).send('Erro ao buscar dados');
 
   const porDiaLabels = stats.porDia.map(d => d.dia.toISOString().split('T')[0]);
@@ -76,6 +83,9 @@ router.get('/', autenticar, async (req, res) => {
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
     .chart-box { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .chart-box h3 { font-size: 15px; color: #555; margin-bottom: 16px; }
+    .seletor-periodo { display: flex; gap: 8px; margin-bottom: 16px; }
+    .seletor-periodo a { font-size: 13px; color: #075e54; text-decoration: none; padding: 4px 12px; border-radius: 16px; border: 1px solid #d0d7d4; }
+    .seletor-periodo a.ativo { background: #075e54; color: white; border-color: #075e54; }
     .tabela-box { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 30px; }
     .tabela-box h3 { font-size: 15px; color: #555; margin-bottom: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -94,7 +104,7 @@ router.get('/', autenticar, async (req, res) => {
 <div class="container">
   <div class="cards">
     <div class="card azul">
-      <div class="label">Conversas (30 dias)</div>
+      <div class="label">Conversas (${dias} dias)</div>
       <div class="numero">${stats.total}</div>
     </div>
     <div class="card verde">
@@ -121,7 +131,12 @@ router.get('/', autenticar, async (req, res) => {
 
   <div class="charts">
     <div class="chart-box">
-      <h3>📈 Conversas por dia (últimos 7 dias)</h3>
+      <h3>📈 Conversas por dia (últimos ${dias} dias)</h3>
+      <div class="seletor-periodo">
+        <a href="?dias=7" class="${dias === 7 ? 'ativo' : ''}">7 dias</a>
+        <a href="?dias=30" class="${dias === 30 ? 'ativo' : ''}">30 dias</a>
+        <a href="?dias=90" class="${dias === 90 ? 'ativo' : ''}">90 dias</a>
+      </div>
       <canvas id="chartDia"></canvas>
     </div>
     <div class="chart-box">
