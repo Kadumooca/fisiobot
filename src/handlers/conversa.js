@@ -723,7 +723,15 @@ async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialid
   const horariosBrutos = await buscarHorarios(agenda.agendaId, agenda.procedimentoId, dias);
   if (!horariosBrutos?.length) return enviarMensagem(telefone, `😔 Sem horários nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}`);
 
-  const sexoConhecido = cliente?.Sexo || sexoInformado || null;
+  // Antes de decidir se precisa perguntar o sexo, tenta reconhecer o cliente
+  // pelo telefone (já cadastrado no Fisiosoft) — evita perguntar de novo pra
+  // quem já é cliente conhecido da clínica e já tem o sexo no cadastro.
+  let clienteConhecido = cliente;
+  if (!clienteConhecido?.Sexo && !sexoInformado) {
+    clienteConhecido = (await buscarClientePorTelefone(telefone)) || cliente;
+  }
+
+  const sexoConhecido = clienteConhecido?.Sexo || sexoInformado || null;
 
   // Só pergunta o sexo quando a lista realmente inclui um horário restrito
   // (ex: Aldine seg/qua/qui 17h+) e ainda não sabemos o sexo do paciente —
@@ -735,7 +743,7 @@ async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialid
     await setSessao(telefone, {
       etapa: 'aguardando_sexo_agendamento',
       agendaPendente: agenda, diasPendente: dias, especialidadePendente: especialidade,
-      regiaoCorpoPendente: regiaoCorpo, clientePendente: cliente,
+      regiaoCorpoPendente: regiaoCorpo, clientePendente: clienteConhecido,
     });
     return enviarMensagem(telefone, `Antes de mostrar os horários: alguns têm restrição de gênero. Você é *homem* ou *mulher*?\n\n*1.* Homem\n*2.* Mulher`);
   }
@@ -747,7 +755,7 @@ async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialid
 
   if (!horarios.length) return enviarMensagem(telefone, `😔 Sem horários nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}`);
   const lista = horarios.map((h, i) => `*${i+1}.* ${h.diaSemana} ${h.data} às ${h.hora}`).join('\n');
-  await setSessao(telefone, { etapa: 'aguardando_horario', agenda, horarios, cliente, especialidade, regiaoCorpo });
+  await setSessao(telefone, { etapa: 'aguardando_horario', agenda, horarios, cliente: clienteConhecido, especialidade, regiaoCorpo });
   return enviarMensagem(telefone, `📅 *Horários — ${agenda.agendaNome}:*\n\n${lista}\n\nDigite o número ou *0* para encerrar.`);
 }
 
