@@ -87,9 +87,9 @@ function ehFeriado(data) {
   return FERIADOS.has(formatarData(data));
 }
 
-// Agenda 7 = Pilates Tarde (Aldine): bloqueia horários 17h+ para masculino em ter/qua/qui
+// Agenda 7 = Pilates Tarde (Aldine): bloqueia horários 17h+ para masculino em seg/qua/qui
 const AGENDA_ALDINE_TARDE = 7;
-const DIAS_BLOQUEIO_MASCULINO = new Set([2, 3, 4]); // 2=terça, 3=quarta, 4=quinta
+const DIAS_BLOQUEIO_MASCULINO = new Set([1, 3, 4]); // 1=segunda, 3=quarta, 4=quinta (Date.getDay())
 
 function ehHorarioBloqueadoMasculino(agendaId, diaSemana, hora) {
   if (agendaId !== AGENDA_ALDINE_TARDE) return false;
@@ -109,10 +109,9 @@ function horarioBloqueadoParaCliente(agenda, horario, cliente) {
   return ehHorarioBloqueadoMasculino(agenda.agendaId, diaSemanaNum, horario.hora);
 }
 
-async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7, sexo = null) {
+async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7) {
   const horarios = [];
   const hoje = new Date();
-  const masculino = sexo && sexo.toLowerCase().includes('masculino');
   for (let i = 1; i <= diasBusca && horarios.length < 10; i++) {
     const data = new Date(hoje);
     data.setDate(hoje.getDate() + i);
@@ -121,7 +120,6 @@ async function buscarHorarios(agendaId, procedimentoId, diasBusca = 7, sexo = nu
     const dataStr = formatarData(data);
     const slots = await fisiosoft.buscarHorariosDisponiveis(agendaId, procedimentoId, dataStr);
     if (slots?.length) slots.forEach(hora => {
-      if (masculino && ehHorarioBloqueadoMasculino(agendaId, data.getDay(), hora)) return;
       horarios.push({ data: dataStr, diaSemana: DIAS_SEMANA[data.getDay()], hora, agendaId, procedimentoId });
     });
   }
@@ -223,6 +221,7 @@ async function processarMensagemInterna(telefone, mensagem) {
     case 'aguardando_celular_terceiro':   return handleCelularTerceiro(telefone, texto, sessao);
     case 'aguardando_especialidade':      return handleEspecialidade(telefone, texto, sessao);
     case 'aguardando_periodo':            return handlePeriodo(telefone, texto, sessao);
+    case 'aguardando_sexo_agendamento':   return handleSexoAgendamento(telefone, texto, sessao);
     case 'aguardando_horario':            return handleHorario(telefone, texto, sessao);
     case 'aguardando_confirmacao':        return handleConfirmacao(telefone, texto, sessao);
     case 'aguardando_cancelamento':       return handleCancelamento(telefone, texto, sessao);
@@ -719,14 +718,50 @@ async function handlePeriodo(telefone, texto, sessao) {
   return buscarMostrarHorarios(telefone, sessao.cliente, periodos[i], sessao.especialidade.diasBusca || 7, sessao.especialidade, sessao.regiaoCorpo);
 }
 
-async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialidade, regiaoCorpo) {
+async function buscarMostrarHorarios(telefone, cliente, agenda, dias, especialidade, regiaoCorpo, sexoInformado = null) {
   await enviarMensagem(telefone, `🔍 Buscando horários disponíveis...`);
-  const sexo = cliente?.Sexo || null;
-  const horarios = await buscarHorarios(agenda.agendaId, agenda.procedimentoId, dias, sexo);
-  if (!horarios?.length) return enviarMensagem(telefone, `😔 Sem horários nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}`);
+  const horariosBrutos = await buscarHorarios(agenda.agendaId, agenda.procedimentoId, dias);
+  if (!horariosBrutos?.length) return enviarMensagem(telefone, `😔 Sem horários nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}`);
+
+  const sexoConhecido = cliente?.Sexo || sexoInformado || null;
+
+  // Só pergunta o sexo quando a lista realmente inclui um horário restrito
+  // (ex: Aldine seg/qua/qui 17h+) e ainda não sabemos o sexo do paciente —
+  // evita perguntar à toa quando a restrição nem se aplica aos resultados.
+  const temHorarioRestrito = horariosBrutos.some(h =>
+    ehHorarioBloqueadoMasculino(h.agendaId, DIAS_SEMANA.indexOf(h.diaSemana), h.hora)
+  );
+  if (temHorarioRestrito && !sexoConhecido) {
+    await setSessao(telefone, {
+      etapa: 'aguardando_sexo_agendamento',
+      agendaPendente: agenda, diasPendente: dias, especialidadePendente: especialidade,
+      regiaoCorpoPendente: regiaoCorpo, clientePendente: cliente,
+    });
+    return enviarMensagem(telefone, `Antes de mostrar os horários: alguns têm restrição de gênero. Você é *homem* ou *mulher*?\n\n*1.* Homem\n*2.* Mulher`);
+  }
+
+  const masculino = sexoConhecido && sexoConhecido.toLowerCase().includes('masculino');
+  const horarios = masculino
+    ? horariosBrutos.filter(h => !ehHorarioBloqueadoMasculino(h.agendaId, DIAS_SEMANA.indexOf(h.diaSemana), h.hora))
+    : horariosBrutos;
+
+  if (!horarios.length) return enviarMensagem(telefone, `😔 Sem horários nos próximos ${dias} dias para *${agenda.agendaNome}*.\n\n${CONTATO_HUMANO}`);
   const lista = horarios.map((h, i) => `*${i+1}.* ${h.diaSemana} ${h.data} às ${h.hora}`).join('\n');
   await setSessao(telefone, { etapa: 'aguardando_horario', agenda, horarios, cliente, especialidade, regiaoCorpo });
   return enviarMensagem(telefone, `📅 *Horários — ${agenda.agendaNome}:*\n\n${lista}\n\nDigite o número ou *0* para encerrar.`);
+}
+
+async function handleSexoAgendamento(telefone, texto, sessao) {
+  const t = texto.trim().toLowerCase();
+  let sexoInformado = null;
+  if (t === '1' || t.includes('homem') || t.includes('masculino')) sexoInformado = 'Masculino';
+  else if (t === '2' || t.includes('mulher') || t.includes('feminino')) sexoInformado = 'Feminino';
+  else return enviarMensagem(telefone, `Não entendi. Digite *1* para Homem ou *2* para Mulher.`);
+
+  return buscarMostrarHorarios(
+    telefone, sessao.clientePendente, sessao.agendaPendente, sessao.diasPendente,
+    sessao.especialidadePendente, sessao.regiaoCorpoPendente, sexoInformado
+  );
 }
 
 async function handleHorario(telefone, texto, sessao) {
