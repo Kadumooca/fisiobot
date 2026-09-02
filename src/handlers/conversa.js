@@ -2,7 +2,7 @@ const { getSessao, setSessao } = require('../utils/sessao');
 const { enviarMensagem } = require('../services/whatsapp');
 const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
-const { validarCPF, limparCPF } = require('../utils/formatters');
+const { validarCPF, limparCPF, validarCelular } = require('../utils/formatters');
 const {
   buscarClientePorTelefone, salvarClientePorTelefone,
   registrarLead, registrarConversa, marcarAgendou,
@@ -615,13 +615,11 @@ async function handleCelularNovo(telefone, texto, sessao) {
     return enviarMensagem(telefone, `Esse número é o *CPF* que você já informou. 😊\n\nAgora preciso do seu *celular* com DDD.\n\nExemplo: 11999999999`);
   }
 
-  if (celular.length < 10 || celular.length > 11) {
+  if (!validarCelular(celular)) {
+    if (celular.length === 11 && celular[2] !== '9') {
+      return enviarMensagem(telefone, `Esse número não parece um celular válido (poderia ser um CPF?). 🤔\n\nInforme seu *celular* com DDD.\n\nExemplo: 11999999999`);
+    }
     return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
-  }
-
-  // Celular com 11 dígitos deve ter "9" como 3º dígito (padrão de celular no Brasil desde 2016)
-  if (celular.length === 11 && celular[2] !== '9') {
-    return enviarMensagem(telefone, `Esse número não parece um celular válido (poderia ser um CPF?). 🤔\n\nInforme seu *celular* com DDD.\n\nExemplo: 11999999999`);
   }
 
   const sexo = sessao.sexoNovo || '';
@@ -670,7 +668,9 @@ async function handleNomeTerceiro(telefone, texto, sessao) {
 
 async function handleCelularTerceiro(telefone, texto, sessao) {
   const celular = texto.replace(/\D/g, '');
-  if (celular.length < 10) return enviarMensagem(telefone, `Celular inválido. Informe com DDD.`);
+  if (!validarCelular(celular)) {
+    return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
+  }
   await enviarMensagem(telefone, '⏳ Criando cadastro...');
   const id = await fisiosoft.incluirCliente({ Nome: sessao.nomeTerceiro, Cpf: sessao.cpfTerceiro, Celular: celular, Email: '', Sexo: '' });
   if (!id) {
