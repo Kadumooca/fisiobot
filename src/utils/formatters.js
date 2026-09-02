@@ -32,8 +32,18 @@ function formatarCPF(cpf) {
   return c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 }
 
+function validarCelular(celular) {
+  const c = celular.replace(/\D/g, '');
+  if (c.length < 10 || c.length > 11) return false;
+  // Celular com 11 dígitos deve ter "9" como 3º dígito (padrão de celular
+  // no Brasil desde 2016) — sem essa checagem, números com todos os
+  // dígitos iguais (ex: 11111111111) passavam só pela checagem de tamanho.
+  if (c.length === 11 && c[2] !== '9') return false;
+  return true;
+}
+
 function validarData(data) {
   return /^\d{2}\/\d{2}\/\d{4}$/.test(data);
 }
 
-module.exports = { validarCPF, limparCPF, formatarCPF, validarData };
+module.exports = { validarCPF, limparCPF, formatarCPF, validarCelular, validarData };
