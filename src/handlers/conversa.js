@@ -2,7 +2,7 @@ const { getSessao, setSessao } = require('../utils/sessao');
 const { enviarMensagem } = require('../services/whatsapp');
 const fisiosoft = require('../services/fisiosoft');
 const { consultarIA } = require('../services/ia');
-const { validarCPF, limparCPF, validarCelular } = require('../utils/formatters');
+const { validarCPF, limparCPF, validarCelular, limparCelular } = require('../utils/formatters');
 const {
   buscarClientePorTelefone, salvarClientePorTelefone,
   registrarLead, registrarConversa, marcarAgendou,
@@ -607,7 +607,7 @@ async function handleSexoNovo(telefone, texto, sessao) {
 }
 
 async function handleCelularNovo(telefone, texto, sessao) {
-  const celular = texto.replace(/\D/g, '');
+  const celular = limparCelular(texto);
 
   // Detecta se o paciente digitou o CPF por engano (mesmo valor já informado antes)
   const cpfReferencia = sessao.cpfNovo || sessao.cpfPreenchido;
@@ -667,7 +667,7 @@ async function handleNomeTerceiro(telefone, texto, sessao) {
 }
 
 async function handleCelularTerceiro(telefone, texto, sessao) {
-  const celular = texto.replace(/\D/g, '');
+  const celular = limparCelular(texto);
   if (!validarCelular(celular)) {
     return enviarMensagem(telefone, `Celular inválido. Informe com DDD (10 ou 11 dígitos).\n\nExemplo: 11999999999`);
   }
