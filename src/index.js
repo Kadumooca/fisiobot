@@ -20,6 +20,20 @@ global.registrarEncerramentoBot = (telefone) => {
   ultimoEncerramentoBot.set(telefone, Date.now());
 };
 
+// Alerta genérico pro WhatsApp pessoal do Kadu (NUMERO_ALERTA) — usado por
+// outros módulos (ex: conversa.js, quando um agendamento falha DEPOIS do
+// paciente já ter confirmado) pra avisar de algo que precisa de ação manual,
+// sem cada módulo reimplementar o envio. Mesmo destino já usado pelos
+// alertas de instabilidade da Evolution API logo abaixo.
+global.enviarAlertaAdmin = async (mensagem) => {
+  const numeroAlerta = process.env.NUMERO_ALERTA;
+  if (!numeroAlerta) {
+    console.error('[ALERTA-ADMIN] NUMERO_ALERTA não configurado — alerta ficou só no log.');
+    return;
+  }
+  await enviarMensagem(numeroAlerta, mensagem);
+};
+
 const NUMEROS_INTERNOS = new Set([
   '5511963675329', '5511959652048', '5511975444523', '5511988404884',
   '5511985033232', '5511998685040', '5511947034822', '5511973858548',
