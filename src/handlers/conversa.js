@@ -40,6 +40,12 @@ const FRASES_NAO_REATIVAR = [
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+// IMPORTANTE: IdAgenda/IdProfissional precisam bater com o Cadastro de Agenda
+// e o Cadastro de Profissionais do Fisiosoft. Se um profissional for
+// desativado/substituído lá, atualize aqui também — senão o agendamento
+// passa pela busca de horários normalmente, mas quebra só na hora de gravar
+// (erro "profissional desativado"), deixando o paciente sem agendamento real
+// mesmo depois de confirmar (bug identificado em 19/10/2026).
 const AGENDAS = {
   '1': { nome: 'Fisioterapia', periodos: [
     { label: '🌅 Manhã (7h às 11h)', agendaId: 1, procedimentoId: 5, idProfissional: 1, agendaNome: 'Fisioterapia - Manhã' },
@@ -50,8 +56,9 @@ const AGENDAS = {
     { label: '🌆 Tarde (13h às 20h)', agendaId: 4, procedimentoId: 6, idProfissional: 2, agendaNome: 'Hidroterapia - Tarde' },
   ]},
   '3': { nome: 'Pilates', periodos: [
-    { label: '🌅 Manhã (7h às 12h)', agendaId: 28, procedimentoId: 57, idProfissional: 27, agendaNome: 'Pilates - Manhã' },
-    { label: '🌆 Tarde (15h às 19h)', agendaId: 7, procedimentoId: 57, idProfissional: 6, agendaNome: 'Pilates - Tarde' },
+    { label: '🌅 Manhã - seg/qua/sex (7h às 12h)', agendaId: 33, procedimentoId: 57, idProfissional: 32, agendaNome: 'Pilates - Manhã (Gabryely)' },
+    { label: '🌆 Tarde - seg/qua/qui (15h às 19h)', agendaId: 7, procedimentoId: 57, idProfissional: 6, agendaNome: 'Pilates - Tarde (Aldine)' },
+    { label: '🌆 Tarde - ter/sex (15h às 19h)', agendaId: 30, procedimentoId: 57, idProfissional: 29, agendaNome: 'Pilates - Tarde (Deivid)' },
   ]},
   '4': { nome: 'RPG', periodos: [
     { label: '🌅 Quinta manhã (8h às 11h)', agendaId: 6, procedimentoId: 9, idProfissional: 7, agendaNome: 'RPG - Manhã quinta' },
@@ -62,9 +69,6 @@ const AGENDAS = {
   ]},
   '6': { nome: 'Consulta Vascular', diasBusca: 30, periodos: [
     { label: '📋 Ver horários disponíveis', agendaId: 11, procedimentoId: 22, idProfissional: 9, agendaNome: 'Consulta Vascular' },
-  ]},
-  '7': { nome: 'Home Care', diasBusca: 7, periodos: [
-    { label: '📋 Ver horários disponíveis', agendaId: 32, procedimentoId: 101, idProfissional: 31, agendaNome: 'Home Care - Domiciliar' },
   ]},
 };
 
@@ -697,13 +701,13 @@ async function iniciarAgendamento(telefone, cliente, regiaoCorpo) {
   return enviarMensagem(telefone,
     `Para qual especialidade? 😊\n\n` +
     `*1.* 🦴 Fisioterapia\n*2.* 🏊 Hidroterapia\n*3.* 🧘 Pilates\n*4.* 📐 RPG\n` +
-    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n*7.* 🏠 Home Care (Domiciliar)\n\n_ou *0* para encerrar_`
+    `*5.* 🪡 Acupuntura\n*6.* 🩺 Consulta Vascular\n\n_ou *0* para encerrar_`
   );
 }
 
 async function handleEspecialidade(telefone, texto, sessao) {
   const esp = AGENDAS[texto];
-  if (!esp) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 7.`);
+  if (!esp) return enviarMensagem(telefone, `Opção inválida. Digite um número entre 1 e 6.`);
   await registrarLead(telefone, sessao.cliente?.Nome, esp.nome);
   if (esp.periodos.length === 1) return buscarMostrarHorarios(telefone, sessao.cliente, esp.periodos[0], esp.diasBusca || 7, esp, sessao.regiaoCorpo);
   const lista = esp.periodos.map((p, i) => `*${i+1}.* ${p.label}`).join('\n');
@@ -847,8 +851,24 @@ async function handleConfirmacao(telefone, texto, sessao) {
     Hora: sessao.horario.hora,
   });
 
-  if (!resultado) return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
-  if (resultado.erro) return enviarMensagem(telefone, `⚠️ *${resultado.erro}*\n\n${CONTATO_HUMANO}`);
+  if (!resultado || resultado.erro) {
+    // Falha ao gravar DEPOIS do paciente já ter confirmado — ele passou por
+    // todo o cadastro/escolha e fica sem agendamento real nenhum. Alerta o
+    // número de admin (Kadu) com os dados do paciente pra follow-up manual,
+    // em vez de deixar essa perda só visível garimpando o log depois.
+    const motivo = resultado?.erro || 'erro desconhecido';
+    console.error(`[AGENDAMENTO-FALHOU] ${telefone} (${sessao.cliente.Nome}) - ${sessao.agenda.agendaNome} ${sessao.horario.diaSemana} ${sessao.horario.data} ${sessao.horario.hora} - Motivo: ${motivo}`);
+    if (global.enviarAlertaAdmin) {
+      global.enviarAlertaAdmin(
+        `⚠️ *Agendamento falhou após confirmação do paciente*\n\n` +
+        `👤 ${sessao.cliente.Nome}\n📱 ${telefone}\n💆 ${sessao.agenda.agendaNome}\n` +
+        `📅 ${sessao.horario.diaSemana} ${sessao.horario.data} às ${sessao.horario.hora}\n` +
+        `❌ Motivo: ${motivo}\n\n_Paciente ainda não tem agendamento real — contato manual necessário._`
+      ).catch(e => console.error('[AGENDAMENTO-FALHOU] Erro ao enviar alerta admin:', e.message));
+    }
+    if (resultado?.erro) return enviarMensagem(telefone, `⚠️ *${resultado.erro}*\n\n${CONTATO_HUMANO}`);
+    return enviarMensagem(telefone, `❌ Erro ao agendar.\n\n${CONTATO_HUMANO}`);
+  }
 
   await marcarAgendou(telefone);
 
@@ -886,13 +906,6 @@ async function handleConfirmacao(telefone, texto, sessao) {
       `📋 *Orientações:*\n\n📁 Traga *exames* e *encaminhamento médico* (se houver)\n` +
       `👕 Vista *roupa leve para ginástica*\n` +
       `⏱️ Sessão individual de *1 hora*, *1x por semana*`
-    );
-  } else if (nome.includes('HOME CARE')) {
-    await enviarMensagem(telefone,
-      `📋 *Orientações:*\n\n🏠 Atendimento realizado na sua residência\n` +
-      `🧰 Levamos todo o material necessário para a sessão\n` +
-      `⏱️ Sessão de *1 hora*\n` +
-      `📄 Fornecemos documentação completa para reembolso no plano de saúde`
     );
   } else {
     await enviarMensagem(telefone,
