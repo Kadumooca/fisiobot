@@ -320,17 +320,21 @@ async function handleLissa(telefone, texto, sessao) {
 async function handleRespostaLissa(telefone, texto, sessao) {
   const textoLower = texto.toLowerCase().trim();
 
-  // Tokens curtos (1-2 letras) só podem ser comparados por igualdade exata,
-  // nunca por .includes() — senão combinam com qualquer palavra que contenha
-  // essas letras (ex: "si" dentro de "assim", "positivo"). Adicionado após
-  // caso real: paciente respondeu "Si" (faltou o "m" de "Sim") e não foi
-  // reconhecido como confirmação, deixando o agendamento travado.
-  const PALAVRAS_SIM_EXATAS = ['si'];
+  // Palavras curtas/comuns que só podem ser tratadas como "sim" quando são a
+  // RESPOSTA INTEIRA (igualdade exata), nunca como substring de uma frase
+  // maior — senão combinam com qualquer mensagem que contenha essas letras
+  // por acaso. Casos reais:
+  // - "si" dentro de "assim", "positivo" (faltou o "m" de "Sim")
+  // - "gostaria" dentro de "Gostaria de saber se atende por convênio" — o
+  //   paciente estava fazendo uma PERGUNTA (sobre convênio) e o bot abriu o
+  //   menu de horários sem nunca responder, porque "gostaria" batia como
+  //   substring na lista de confirmação (bug identificado em 26/10/2026).
+  const PALAVRAS_SIM_EXATAS = ['si', 'gostaria'];
   const ehSimExato = PALAVRAS_SIM_EXATAS.some(p => textoLower === p);
 
   const ehSim = ehSimExato || [
     'sim', 'claro', 'pode', 'quero', 'yes', 'ok', 'vamos', 'pode ser',
-    'quero sim', 'gostaria', 'aceito', 'topo', 'vamos lá', 'por favor',
+    'quero sim', 'aceito', 'topo', 'vamos lá', 'por favor',
     'quero marcar', 'quero agendar', 'quero avaliação', 'quero uma avaliação',
     'tem horário', 'quais horários', 'quero ver horários', 'pode verificar',
     'pode consultar', 'mostrar horários', 'ver horários', 'ver horário',
